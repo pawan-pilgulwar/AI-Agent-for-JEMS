@@ -7,11 +7,21 @@ async def _noop_startup() -> None:
     return None
 
 
-def test_learning_path_happy_path(monkeypatch):
-    """Happy-path test with the CrewAI/Ollama call mocked out -- no real LLM call."""
-    monkeypatch.setattr(main, "ensure_vector_index", _noop_startup)
+class FakeRagRetrievalTool:
+    """Stands in for tools.rag_retrieval_tool.RagRetrievalTool -- no real
+    MongoDB Atlas / $vectorSearch calls in tests."""
 
-    def fake_run_learning_path_crew(current_skills, skill_gaps, career_objective):
+    async def retrieve_jobs(self, query_text, top_k=None, only_open=True):
+        return []
+
+
+def test_learning_path_happy_path(monkeypatch):
+    """Happy-path test with the CrewAI/Ollama call and RAG retrieval both
+    mocked out -- no real LLM or MongoDB Atlas call."""
+    monkeypatch.setattr(main, "ensure_vector_index", _noop_startup)
+    monkeypatch.setattr(main, "RagRetrievalTool", FakeRagRetrievalTool)
+
+    def fake_run_learning_path_crew(current_skills, skill_gaps, career_objective, retrieved_jobs=None):
         return {
             "learning_path": [
                 {
@@ -23,6 +33,8 @@ def test_learning_path_happy_path(monkeypatch):
                 for skill in skill_gaps
             ],
             "target_resume_skills": current_skills + skill_gaps,
+            "grounded": False,
+            "grounding_sources": [],
         }
 
     monkeypatch.setattr(main, "run_learning_path_crew", fake_run_learning_path_crew)
@@ -47,6 +59,8 @@ def test_learning_path_happy_path(monkeypatch):
     for step in body["learning_path"]:
         assert step["skill"] in body["skill_gaps"]
         assert step["resource_type"] == "course"
+    assert body["grounded"] is False
+    assert body["grounding_sources"] == []
 
 
 def test_learning_path_rejects_invalid_input():

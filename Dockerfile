@@ -7,7 +7,12 @@ WORKDIR /app
 
 COPY requirements.txt .
 
-RUN pip install --no-cache-dir --extra-index-url https://download.pytorch.org/whl/cpu -r requirements.txt
+# --with-deps also installs the OS libraries Chromium needs on this slim
+# base image; only chromium is pulled (not firefox/webkit) to keep the image
+# smaller -- it's still a sizeable addition, needed only for the JS-rendered
+# careers-page fallback in tools/web_scraper_tool.py.
+RUN pip install --no-cache-dir --extra-index-url https://download.pytorch.org/whl/cpu -r requirements.txt \
+    && playwright install --with-deps chromium
 
 COPY . .
 

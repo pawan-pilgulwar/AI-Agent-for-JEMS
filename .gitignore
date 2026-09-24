@@ -4,3 +4,4 @@ __pycache__/
 .venv/
 .venv_test/
 .env
+.docker-compose.cpu.yml

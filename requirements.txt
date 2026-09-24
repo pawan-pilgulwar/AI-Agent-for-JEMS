@@ -8,6 +8,9 @@ pymongo>=4.8.0
 torch==2.13.0+cpu
 sentence-transformers>=3.1.1
 python-dotenv>=1.0.1
+beautifulsoup4>=4.12.3
+playwright>=1.47.0
+ddgs>=9.0.0
 pytest>=8.3.3
 pytest-asyncio>=0.24.0
 httpx>=0.28.1

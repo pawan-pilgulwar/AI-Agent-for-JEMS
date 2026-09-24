@@ -8,6 +8,12 @@ time -- `$vectorSearch` runs directly against `candidates`. If the candidate
 pool grows large enough that re-embedding on every profile edit becomes
 expensive, splitting embeddings into their own collection keyed by user_id is
 the natural next step, but it is not needed at this scale.
+
+`companies` and `job_postings` (added for RAG grounding -- see
+tools/rag_retrieval_tool.py and db/company_store.py) follow the same
+embed-on-the-document pattern. Each Atlas Vector Search index is scoped to a
+single collection, so these two collections each get their own named index
+rather than sharing the `candidates` one.
 """
 
 import logging
@@ -21,6 +27,12 @@ logger = logging.getLogger(__name__)
 CANDIDATES_COLLECTION = "candidates"
 EMBEDDING_FIELD = "profile_embedding"
 EMBEDDING_DIMENSIONS = 384  # all-MiniLM-L6-v2 output size
+
+COMPANIES_COLLECTION = "companies"
+COMPANY_EMBEDDING_FIELD = "profile_embedding"
+
+JOB_POSTINGS_COLLECTION = "job_postings"
+JOB_EMBEDDING_FIELD = "posting_embedding"
 
 _client: AsyncIOMotorClient | None = None
 
@@ -38,8 +50,10 @@ def get_database() -> AsyncIOMotorDatabase:
     return get_client()[settings.mongodb_db_name]
 
 
-async def ensure_vector_index() -> None:
-    """Best-effort creation of the Atlas Vector Search index on startup.
+async def _ensure_single_index(
+    collection, index_name: str, embedding_field: str, filter_paths: list[str]
+) -> None:
+    """Best-effort creation of one Atlas Vector Search index on startup.
 
     Atlas Search/Vector Search indexes are normally created once via the
     Atlas UI or Atlas Admin API (see README) -- M0 free-tier clusters do not
@@ -48,40 +62,55 @@ async def ensure_vector_index() -> None:
     so the service still starts up cleanly and the index can be created
     manually instead.
     """
-    settings = get_settings()
-    db = get_database()
-    collection = db[CANDIDATES_COLLECTION]
-
     index_model = {
-        "name": settings.vector_index_name,
+        "name": index_name,
         "type": "vectorSearch",
         "definition": {
             "fields": [
                 {
                     "type": "vector",
-                    "path": EMBEDDING_FIELD,
+                    "path": embedding_field,
                     "numDimensions": EMBEDDING_DIMENSIONS,
                     "similarity": "cosine",
                 },
-                {
-                    "type": "filter",
-                    "path": "user_id",
-                },
+                *[{"type": "filter", "path": path} for path in filter_paths],
             ]
         },
     }
 
     try:
         existing = await collection.list_search_indexes().to_list(length=None)
-        if any(idx.get("name") == settings.vector_index_name for idx in existing):
-            logger.info("Vector search index '%s' already exists.", settings.vector_index_name)
+        if any(idx.get("name") == index_name for idx in existing):
+            logger.info("Vector search index '%s' already exists.", index_name)
             return
         await collection.create_search_index(index_model)
-        logger.info("Created vector search index '%s'.", settings.vector_index_name)
+        logger.info("Created vector search index '%s'.", index_name)
     except Exception as exc:  # noqa: BLE001 - best-effort, never block startup
         logger.warning(
             "Could not auto-create Atlas Vector Search index '%s' (%s). "
             "Create it manually via the Atlas UI or Admin API -- see README.",
-            settings.vector_index_name,
+            index_name,
             exc,
         )
+
+
+async def ensure_vector_index() -> None:
+    """Best-effort creation of all three Atlas Vector Search indexes on startup."""
+    settings = get_settings()
+    db = get_database()
+
+    await _ensure_single_index(
+        db[CANDIDATES_COLLECTION], settings.vector_index_name, EMBEDDING_FIELD, ["user_id"]
+    )
+    await _ensure_single_index(
+        db[COMPANIES_COLLECTION],
+        settings.vector_index_name_companies,
+        COMPANY_EMBEDDING_FIELD,
+        ["domain"],
+    )
+    await _ensure_single_index(
+        db[JOB_POSTINGS_COLLECTION],
+        settings.vector_index_name_jobs,
+        JOB_EMBEDDING_FIELD,
+        ["status", "company_id"],
+    )

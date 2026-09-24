@@ -19,6 +19,18 @@ class Settings(BaseSettings):
 
     match_top_n: int = os.environ.get("MATCH_TOP_N", 5)
 
+    rag_top_k: int = os.environ.get("RAG_TOP_K", 5)
+    scrape_rate_limit_seconds: float = os.environ.get("SCRAPE_RATE_LIMIT_SECONDS", 2)
+    scrape_user_agent: str = os.environ.get(
+        "SCRAPE_USER_AGENT", "JemsBot/1.0 (+https://jems.exponentor.com/bot-info)"
+    )
+    vector_index_name_companies: str = os.environ.get(
+        "VECTOR_INDEX_NAME_COMPANIES", "companies_vector_index"
+    )
+    vector_index_name_jobs: str = os.environ.get(
+        "VECTOR_INDEX_NAME_JOBS", "job_postings_vector_index"
+    )
+
     @property
     def litellm_model(self) -> str:
         """CrewAI/LiteLLM provider string. This is the only place a paid model
