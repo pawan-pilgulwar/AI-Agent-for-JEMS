@@ -15,12 +15,14 @@ services:
             - driver: nvidia
               count: all
               capabilities: [gpu]
+    # Command: >
+    #   bash -c "ollama serve --model qwen3:30b --port 11434"
     # First-time setup: after `docker-compose up -d`, pull the model once:
-    #   docker exec -it <ollama_container_name> ollama pull llama3.2:1b
+    #   docker exec -it <ollama_container_name> ollama pull qwen3:30b
 
   jems-agent:
-    build: .
-    image: jems-agent
+    # build: .
+    image: pawan0603/jems-agent:latest
     ports:
       - "8000:8000"
     env_file:
