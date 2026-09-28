@@ -1,0 +1,1335 @@
+{
+	"info": {
+		"_postman_id": "a8c9b31d-55e1-4c28-98e3-f18e95c52c67",
+		"name": "JEMS Multi-Agent AI Service",
+		"description": "Complete Postman API Collection for JEMS (AI-Powered Academia-Industry Collaboration Platform - SIH 2026).\nIncludes automated pre-request & test scripts that dynamically inject and chain environment variables across all 6 specialized agents and the central orchestrator.",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "0. System & Health",
+			"item": [
+				{
+					"name": "Service Health Check",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									"// Verify baseUrl is configured in the environment",
+									"if (!pm.environment.get(\"baseUrl\")) {",
+									"    pm.environment.set(\"baseUrl\", \"http://localhost:8000\");",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"pm.test(\"Service is healthy\", function () {",
+									"    var data = pm.response.json();",
+									"    pm.expect(data.status).to.eql(\"ok\");",
+									"    pm.expect(data.service).to.eql(\"jems-agent-service\");",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/health",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"health"
+							]
+						},
+						"description": "Checks liveness and version of the JEMS AI microservice."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "1. Central Multi-Agent Orchestrator (/orchestrate)",
+			"description": "The central router that receives requests with a `request_type` envelope and dynamically routes them to the appropriate agent crew or pipeline using environment variables.",
+			"item": [
+				{
+					"name": "1.1 Full Student Pipeline (E2E Workflow)",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									"// Ensure required dynamic environment variables exist",
+									"if (!pm.environment.get(\"studentId\")) pm.environment.set(\"studentId\", \"stud-101\");",
+									"if (!pm.environment.get(\"careerObjective\")) pm.environment.set(\"careerObjective\", \"Backend Software Developer\");",
+									"if (!pm.environment.get(\"targetRole\")) pm.environment.set(\"targetRole\", \"Backend Engineer\");",
+									"if (!pm.environment.get(\"studentSkills\")) pm.environment.set(\"studentSkills\", '[\"Python\", \"SQL\", \"Git\"]');",
+									"if (!pm.environment.get(\"targetCompanies\")) pm.environment.set(\"targetCompanies\", '[\"Capgemini\", \"TCS\"]');"
+								],
+								"type": "text/javascript"
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"pm.test(\"E2E Pipeline executed successfully\", function () {",
+									"    var data = pm.response.json();",
+									"    pm.expect(data.status).to.eql(\"success\");",
+									"    pm.expect(data.result).to.have.property(\"analysis\");",
+									"    pm.expect(data.result).to.have.property(\"roadmap\");",
+									"    pm.expect(data.result).to.have.property(\"learning_recommendations\");",
+									"    pm.expect(data.result).to.have.property(\"suggested_jobs\");",
+									"    ",
+									"    // Dynamically store skill gaps extracted by the pipeline",
+									"    if (data.result.analysis.technical_skill_gaps) {",
+									"        pm.environment.set(\"discoveredSkillGaps\", JSON.stringify(data.result.analysis.technical_skill_gaps));",
+									"    }",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"request_type\": \"full_student_pipeline\",\n  \"payload\": {\n    \"student_profile\": {\n      \"user_id\": \"{{studentId}}\",\n      \"name\": \"{{studentName}}\",\n      \"skills\": {{studentSkills}},\n      \"education\": \"B.Tech Computer Science\"\n    },\n    \"resume_text\": \"{{resumeText}}\",\n    \"career_objective\": \"{{careerObjective}}\",\n    \"target_role\": \"{{targetRole}}\",\n    \"target_companies\": {{targetCompanies}},\n    \"timeline_weeks\": {{timelineWeeks}}\n  }\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/orchestrate",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"orchestrate"
+							]
+						},
+						"description": "Executes the full pipeline dynamically: Analysis ➔ Roadmap ➔ Learning ➔ Job Matching."
+					},
+					"response": []
+				},
+				{
+					"name": "1.2 Orchestrate: Analyze Profile (Agent 1)",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									"// Ensure required dynamic values",
+									"if (!pm.environment.get(\"studentId\")) pm.environment.set(\"studentId\", \"stud-101\");",
+									"if (!pm.environment.get(\"studentSkills\")) pm.environment.set(\"studentSkills\", '[\"Python\", \"SQL\", \"Git\"]');"
+								],
+								"type": "text/javascript"
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"pm.test(\"Profile analyzed dynamically\", function () {",
+									"    var res = pm.response.json().result;",
+									"    pm.expect(res).to.have.property(\"student_skills\");",
+									"    pm.expect(res).to.have.property(\"technical_skill_gaps\");",
+									"    pm.expect(res).to.have.property(\"compatibility_score\");",
+									"    ",
+									"    // Dynamically chain discovered gaps to environment for roadmap & learning agents",
+									"    if (res.technical_skill_gaps && res.technical_skill_gaps.length > 0) {",
+									"        pm.environment.set(\"discoveredSkillGaps\", JSON.stringify(res.technical_skill_gaps));",
+									"    }",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"request_type\": \"analyze_profile\",\n  \"payload\": {\n    \"student_profile\": {\n      \"user_id\": \"{{studentId}}\",\n      \"name\": \"{{studentName}}\",\n      \"skills\": {{studentSkills}}\n    },\n    \"resume_text\": \"{{resumeText}}\",\n    \"career_objective\": \"{{careerObjective}}\",\n    \"target_companies\": {{targetCompanies}},\n    \"target_role\": \"{{targetRole}}\"\n  }\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/orchestrate",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"orchestrate"
+							]
+						},
+						"description": "Routes to Agent 1 (Analysis Agent) to evaluate skills against market postings."
+					},
+					"response": []
+				},
+				{
+					"name": "1.3 Orchestrate: Generate Roadmap (Agent 2)",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									"// Ensure discovered gaps exist or fallback",
+									"if (!pm.environment.get(\"discoveredSkillGaps\")) {",
+									"    pm.environment.set(\"discoveredSkillGaps\", '[\"FastAPI\", \"Docker\", \"Redis\"]');",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"pm.test(\"Roadmap milestones generated\", function () {",
+									"    var res = pm.response.json().result;",
+									"    pm.expect(res).to.have.property(\"milestones\");",
+									"    pm.expect(res.milestones).to.be.an(\"array\");",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"request_type\": \"generate_roadmap\",\n  \"payload\": {\n    \"user_id\": \"{{studentId}}\",\n    \"current_skills\": {{studentSkills}},\n    \"skill_gaps\": {{discoveredSkillGaps}},\n    \"career_objective\": \"{{careerObjective}}\",\n    \"target_role\": \"{{targetRole}}\",\n    \"timeline_weeks\": {{timelineWeeks}},\n    \"force_refresh\": false\n  }\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/orchestrate",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"orchestrate"
+							]
+						},
+						"description": "Routes to Agent 2 (Roadmap Agent) to sequence skills into milestones (cached in MongoDB student_roadmaps)."
+					},
+					"response": []
+				},
+				{
+					"name": "1.4 Orchestrate: Recommend Learning (Agent 3)",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									"if (!pm.environment.get(\"discoveredSkillGaps\")) {",
+									"    pm.environment.set(\"discoveredSkillGaps\", '[\"FastAPI\", \"Docker\"]');",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"pm.test(\"Curated resources & FDP training returned\", function () {",
+									"    var res = pm.response.json().result;",
+									"    pm.expect(res).to.have.property(\"resources\");",
+									"    pm.expect(res).to.have.property(\"fdp_training_programs\");",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"request_type\": \"recommend_learning\",\n  \"payload\": {\n    \"user_id\": \"{{studentId}}\",\n    \"skills_to_learn\": {{discoveredSkillGaps}},\n    \"career_objective\": \"{{careerObjective}}\",\n    \"target_role\": \"{{targetRole}}\",\n    \"force_refresh\": false\n  }\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/orchestrate",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"orchestrate"
+							]
+						},
+						"description": "Routes to Agent 3 to curate courses, projects, certifications & FDP modules (cached in learning_recommendations)."
+					},
+					"response": []
+				},
+				{
+					"name": "1.5 Orchestrate: Generate Assessment (Agent 4)",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									"if (!pm.environment.get(\"testDifficulty\")) pm.environment.set(\"testDifficulty\", \"intermediate\");"
+								],
+								"type": "text/javascript"
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"pm.test(\"Assessment test generated and saved to environment\", function () {",
+									"    var res = pm.response.json().result;",
+									"    pm.expect(res).to.have.property(\"test_id\");",
+									"    pm.expect(res).to.have.property(\"questions\");",
+									"    ",
+									"    // Dynamically set currentTestId and question ID for evaluation",
+									"    pm.environment.set(\"currentTestId\", res.test_id);",
+									"    if (res.questions && res.questions.length > 0) {",
+									"        pm.environment.set(\"assessmentQuestionId\", res.questions[0].question_id.toString());",
+									"        if (res.questions[0].correct_answer) {",
+									"            pm.environment.set(\"assessmentAnswer\", res.questions[0].correct_answer);",
+									"        }",
+									"    }",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"request_type\": \"generate_assessment\",\n  \"payload\": {\n    \"user_id\": \"{{studentId}}\",\n    \"skills\": [\"python\", \"fastapi\"],\n    \"role_category\": \"backend engineering\",\n    \"difficulty\": \"{{testDifficulty}}\",\n    \"num_questions\": 3\n  }\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/orchestrate",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"orchestrate"
+							]
+						},
+						"description": "Generates cheat-resistant skill validation questions and stores test_id dynamically in environment."
+					},
+					"response": []
+				},
+				{
+					"name": "1.6 Orchestrate: Evaluate Assessment (Agent 4)",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									"// Fallback test ID if not generated yet",
+									"if (!pm.environment.get(\"currentTestId\")) {",
+									"    pm.environment.set(\"currentTestId\", \"sample-test-uuid\");",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"pm.test(\"Assessment evaluated & badges awarded\", function () {",
+									"    var res = pm.response.json().result;",
+									"    pm.expect(res).to.have.property(\"overall_score\");",
+									"    pm.expect(res).to.have.property(\"verified_skills_awarded\");",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"request_type\": \"evaluate_assessment\",\n  \"payload\": {\n    \"test_id\": \"{{currentTestId}}\",\n    \"user_id\": \"{{studentId}}\",\n    \"skills\": [\"fastapi\"],\n    \"submissions\": [\n      {\n        \"question_id\": {{assessmentQuestionId}},\n        \"answer_text\": \"{{assessmentAnswer}}\"\n      }\n    ]\n  }\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/orchestrate",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"orchestrate"
+							]
+						},
+						"description": "Evaluates candidate answer and updates verified badges in MongoDB verified_skills."
+					},
+					"response": []
+				},
+				{
+					"name": "1.7 Orchestrate: Match Candidates (Agent 5)",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									"if (!pm.environment.get(\"candidateId\")) pm.environment.set(\"candidateId\", \"cand-001\");",
+									"if (!pm.environment.get(\"targetCompany\")) pm.environment.set(\"targetCompany\", \"Capgemini\");"
+								],
+								"type": "text/javascript"
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"pm.test(\"Candidates matched and notifications created\", function () {",
+									"    var res = pm.response.json().result;",
+									"    pm.expect(res).to.have.property(\"ranked_matches\");",
+									"    pm.expect(res).to.have.property(\"notifications\");",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"request_type\": \"match_candidates\",\n  \"payload\": {\n    \"role_title\": \"{{targetRole}}\",\n    \"job_description\": \"Looking for a Junior Backend Developer proficient in Python, FastAPI, and PostgreSQL.\",\n    \"company_name\": \"{{targetCompany}}\",\n    \"candidate_pool\": [\n      {\n        \"id\": \"{{candidateId}}\",\n        \"skills\": [\"python\", \"fastapi\", \"postgresql\"],\n        \"resume_text\": \"2 years experience building REST services with FastAPI and PostgreSQL.\"\n      }\n    ]\n  }\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/orchestrate",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"orchestrate"
+							]
+						},
+						"description": "Matches candidate pool with vector search + LLM reasoning, generating notifications for matches >= 60%."
+					},
+					"response": []
+				},
+				{
+					"name": "1.8 Orchestrate: Suggest Jobs (Agent 5)",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									"if (!pm.environment.get(\"studentId\")) pm.environment.set(\"studentId\", \"stud-101\");"
+								],
+								"type": "text/javascript"
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"pm.test(\"Job suggestions returned\", function () {",
+									"    var res = pm.response.json().result;",
+									"    pm.expect(res).to.have.property(\"suggested_jobs\");",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"request_type\": \"suggest_jobs\",\n  \"payload\": {\n    \"candidate_profile\": {\n      \"user_id\": \"{{studentId}}\",\n      \"skills\": {{studentSkills}}\n    },\n    \"resume_text\": \"{{resumeText}}\",\n    \"top_n\": 3\n  }\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/orchestrate",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"orchestrate"
+							]
+						},
+						"description": "Reverse-match: recommends best matching open positions across both collections for a student."
+					},
+					"response": []
+				},
+				{
+					"name": "1.9 Orchestrate: Scrape Companies (Agent 6)",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									"if (!pm.environment.get(\"targetCompanies\")) pm.environment.set(\"targetCompanies\", '[\"Capgemini\", \"https://www.infosys.com\"]');"
+								],
+								"type": "text/javascript"
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"pm.test(\"Scraped companies batch summary returned\", function () {",
+									"    var res = pm.response.json().result;",
+									"    pm.expect(res).to.have.property(\"total_requested\");",
+									"    pm.expect(res).to.have.property(\"companies\");",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"request_type\": \"scrape_companies\",\n  \"payload\": {\n    \"companies\": {{targetCompanies}},\n    \"max_postings_per_company\": 5\n  }\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/orchestrate",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"orchestrate"
+							]
+						},
+						"description": "Scrapes company websites & career pages into scraped_companies and scraped_job_postings."
+					},
+					"response": []
+				},
+				{
+					"name": "1.10 Orchestrate: Register Company (Platform)",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									"if (!pm.environment.get(\"companyName\")) pm.environment.set(\"companyName\", \"TechCorp Solutions\");",
+									"if (!pm.environment.get(\"websiteUrl\")) pm.environment.set(\"websiteUrl\", \"https://techcorpsolutions.com\");"
+								],
+								"type": "text/javascript"
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"pm.test(\"Company registered & ID saved to environment\", function () {",
+									"    var res = pm.response.json().result;",
+									"    pm.expect(res).to.have.property(\"company_id\");",
+									"    pm.expect(res).to.have.property(\"status\");",
+									"    ",
+									"    // Dynamically store registeredCompanyId",
+									"    pm.environment.set(\"registeredCompanyId\", res.company_id);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"request_type\": \"register_company\",\n  \"payload\": {\n    \"company_name\": \"{{companyName}}\",\n    \"website_url\": \"{{websiteUrl}}\",\n    \"industry\": \"{{companyIndustry}}\",\n    \"company_size\": \"{{companySize}}\",\n    \"tech_stack\": [\"python\", \"fastapi\", \"react\", \"postgresql\"],\n    \"locations\": [\"Bangalore\", \"Pune\"],\n    \"description\": \"Scalable cloud-native banking solutions.\",\n    \"contact_email\": \"hr@techcorpsolutions.com\",\n    \"postings\": [\n      {\n        \"title\": \"Backend Software Engineer Intern\",\n        \"description\": \"Build async REST microservices with Python and FastAPI.\",\n        \"required_skills\": [\"python\", \"fastapi\"],\n        \"nice_to_have_skills\": [\"docker\"],\n        \"experience_level\": \"entry-level\",\n        \"location\": \"Bangalore\",\n        \"employment_type\": \"internship\"\n      }\n    ]\n  }\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/orchestrate",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"orchestrate"
+							]
+						},
+						"description": "Registers platform employers and requirements into registered_companies and registered_job_postings."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "2. Dedicated Agent Endpoints",
+			"description": "Direct REST endpoints corresponding to each individual agent, reading dynamically from environment variables.",
+			"item": [
+				{
+					"name": "2.1 POST /analyze-profile",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									"if (!pm.environment.get(\"studentId\")) pm.environment.set(\"studentId\", \"stud-101\");"
+								],
+								"type": "text/javascript"
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"pm.test(\"Compatibility score and gaps captured\", function () {",
+									"    var data = pm.response.json();",
+									"    pm.expect(data).to.have.property(\"compatibility_score\");",
+									"    if (data.technical_skill_gaps && data.technical_skill_gaps.length > 0) {",
+									"        pm.environment.set(\"discoveredSkillGaps\", JSON.stringify(data.technical_skill_gaps));",
+									"    }",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"student_profile\": {\n    \"user_id\": \"{{studentId}}\",\n    \"name\": \"{{studentName}}\",\n    \"skills\": {{studentSkills}}\n  },\n  \"resume_text\": \"{{resumeText}}\",\n  \"career_objective\": \"{{careerObjective}}\",\n  \"target_companies\": {{targetCompanies}},\n  \"target_role\": \"{{targetRole}}\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/analyze-profile",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"analyze-profile"
+							]
+						},
+						"description": "Direct route for Agent 1 (Profile & Dual-Company Analysis)."
+					},
+					"response": []
+				},
+				{
+					"name": "2.2 POST /generate-roadmap",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									"if (!pm.environment.get(\"discoveredSkillGaps\")) {",
+									"    pm.environment.set(\"discoveredSkillGaps\", '[\"fastapi\", \"docker\", \"redis\"]');",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"pm.test(\"Milestones array returned\", function () {",
+									"    var data = pm.response.json();",
+									"    pm.expect(data.milestones).to.be.an(\"array\");",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"user_id\": \"{{studentId}}\",\n  \"current_skills\": {{studentSkills}},\n  \"skill_gaps\": {{discoveredSkillGaps}},\n  \"career_objective\": \"{{careerObjective}}\",\n  \"target_role\": \"{{targetRole}}\",\n  \"timeline_weeks\": {{timelineWeeks}},\n  \"force_refresh\": false\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/generate-roadmap",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"generate-roadmap"
+							]
+						},
+						"description": "Direct route for Agent 2 (Roadmap Agent) with Atlas caching in student_roadmaps."
+					},
+					"response": []
+				},
+				{
+					"name": "2.3 POST /recommend-learning",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									"if (!pm.environment.get(\"discoveredSkillGaps\")) {",
+									"    pm.environment.set(\"discoveredSkillGaps\", '[\"fastapi\", \"docker\"]');",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"pm.test(\"Resources and FDPs returned\", function () {",
+									"    var data = pm.response.json();",
+									"    pm.expect(data.resources).to.be.an(\"array\");",
+									"    pm.expect(data.fdp_training_programs).to.be.an(\"array\");",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"user_id\": \"{{studentId}}\",\n  \"skills_to_learn\": {{discoveredSkillGaps}},\n  \"career_objective\": \"{{careerObjective}}\",\n  \"target_role\": \"{{targetRole}}\",\n  \"force_refresh\": false\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/recommend-learning",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"recommend-learning"
+							]
+						},
+						"description": "Direct route for Agent 3 (Learning Agent) with Atlas caching in learning_recommendations."
+					},
+					"response": []
+				},
+				{
+					"name": "2.4 POST /assessment/generate",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									"if (!pm.environment.get(\"studentId\")) pm.environment.set(\"studentId\", \"stud-101\");"
+								],
+								"type": "text/javascript"
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"pm.test(\"Test created and test_id saved to environment\", function () {",
+									"    var data = pm.response.json();",
+									"    pm.expect(data.test_id).to.be.a(\"string\");",
+									"    pm.environment.set(\"currentTestId\", data.test_id);",
+									"    if (data.questions && data.questions.length > 0) {",
+									"        pm.environment.set(\"assessmentQuestionId\", data.questions[0].question_id.toString());",
+									"    }",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"user_id\": \"{{studentId}}\",\n  \"skills\": [\"python\", \"fastapi\"],\n  \"role_category\": \"backend engineering\",\n  \"difficulty\": \"{{testDifficulty}}\",\n  \"num_questions\": 3\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/assessment/generate",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"assessment",
+								"generate"
+							]
+						},
+						"description": "Direct route for Agent 4 to generate validation tests, dynamically capturing test_id into environment."
+					},
+					"response": []
+				},
+				{
+					"name": "2.5 POST /assessment/evaluate",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									"if (!pm.environment.get(\"currentTestId\")) pm.environment.set(\"currentTestId\", \"sample-test-uuid\");"
+								],
+								"type": "text/javascript"
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"pm.test(\"Test evaluated & score returned\", function () {",
+									"    var data = pm.response.json();",
+									"    pm.expect(data).to.have.property(\"overall_score\");",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"test_id\": \"{{currentTestId}}\",\n  \"user_id\": \"{{studentId}}\",\n  \"skills\": [\"fastapi\"],\n  \"submissions\": [\n    {\n      \"question_id\": {{assessmentQuestionId}},\n      \"answer_text\": \"{{assessmentAnswer}}\"\n    }\n  ]\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/assessment/evaluate",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"assessment",
+								"evaluate"
+							]
+						},
+						"description": "Direct route for Agent 4 to score tests and award verified badges in verified_skills."
+					},
+					"response": []
+				},
+				{
+					"name": "2.6 POST /match-candidates",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									"if (!pm.environment.get(\"candidateId\")) pm.environment.set(\"candidateId\", \"cand-001\");",
+									"if (!pm.environment.get(\"targetCompany\")) pm.environment.set(\"targetCompany\", \"Capgemini\");"
+								],
+								"type": "text/javascript"
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"pm.test(\"Ranked matches returned\", function () {",
+									"    var data = pm.response.json();",
+									"    pm.expect(data.ranked_matches).to.be.an(\"array\");",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"role_title\": \"{{targetRole}}\",\n  \"job_description\": \"We are seeking a junior backend developer with strong Python, FastAPI, and PostgreSQL skills.\",\n  \"company_name\": \"{{targetCompany}}\",\n  \"candidate_pool\": [\n    {\n      \"id\": \"{{candidateId}}\",\n      \"skills\": [\"python\", \"fastapi\", \"postgresql\"],\n      \"resume_text\": \"2 years academic experience building REST APIs with FastAPI and PostgreSQL.\"\n    }\n  ]\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/match-candidates",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"match-candidates"
+							]
+						},
+						"description": "Direct route for Agent 5 to score candidates against job criteria and output notification payloads."
+					},
+					"response": []
+				},
+				{
+					"name": "2.7 POST /suggest-jobs",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									"if (!pm.environment.get(\"studentId\")) pm.environment.set(\"studentId\", \"stud-101\");"
+								],
+								"type": "text/javascript"
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"pm.test(\"Job suggestions returned\", function () {",
+									"    var data = pm.response.json();",
+									"    pm.expect(data.suggested_jobs).to.be.an(\"array\");",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"candidate_profile\": {\n    \"user_id\": \"{{studentId}}\",\n    \"skills\": {{studentSkills}}\n  },\n  \"resume_text\": \"{{resumeText}}\",\n  \"top_n\": 3\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/suggest-jobs",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"suggest-jobs"
+							]
+						},
+						"description": "Direct route for Agent 5 to reverse-match open jobs for students."
+					},
+					"response": []
+				},
+				{
+					"name": "2.8 POST /scrape-companies",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									"if (!pm.environment.get(\"targetCompanies\")) pm.environment.set(\"targetCompanies\", '[\"Capgemini\", \"https://www.infosys.com\"]');"
+								],
+								"type": "text/javascript"
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"pm.test(\"Scraped companies list returned\", function () {",
+									"    var data = pm.response.json();",
+									"    pm.expect(data.companies).to.be.an(\"array\");",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"companies\": {{targetCompanies}},\n  \"max_postings_per_company\": 5\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/scrape-companies",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"scrape-companies"
+							]
+						},
+						"description": "Direct route for Agent 6 to scrape external career sites."
+					},
+					"response": []
+				},
+				{
+					"name": "2.9 POST /register-company",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									"if (!pm.environment.get(\"companyName\")) pm.environment.set(\"companyName\", \"TechCorp Solutions\");",
+									"if (!pm.environment.get(\"websiteUrl\")) pm.environment.set(\"websiteUrl\", \"https://techcorpsolutions.com\");"
+								],
+								"type": "text/javascript"
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"pm.test(\"Company registered in Atlas\", function () {",
+									"    var data = pm.response.json();",
+									"    pm.expect(data).to.have.property(\"company_id\");",
+									"    pm.expect(data).to.have.property(\"jobs_created\");",
+									"    pm.environment.set(\"registeredCompanyId\", data.company_id);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"company_name\": \"{{companyName}}\",\n  \"website_url\": \"{{websiteUrl}}\",\n  \"industry\": \"{{companyIndustry}}\",\n  \"company_size\": \"{{companySize}}\",\n  \"tech_stack\": [\"python\", \"fastapi\", \"react\", \"postgresql\"],\n  \"locations\": [\"Bangalore\", \"Pune\"],\n  \"description\": \"Scalable cloud-native banking solutions.\",\n  \"contact_email\": \"hr@techcorpsolutions.com\",\n  \"postings\": [\n    {\n      \"title\": \"Backend Software Engineer Intern\",\n      \"description\": \"Build async REST microservices with Python and FastAPI.\",\n      \"required_skills\": [\"python\", \"fastapi\"],\n      \"nice_to_have_skills\": [\"docker\"],\n      \"experience_level\": \"entry-level\",\n      \"location\": \"Bangalore\",\n      \"employment_type\": \"internship\"\n    }\n  ]\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/register-company",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"register-company"
+							]
+						},
+						"description": "Direct route to register platform employers and requirements."
+					},
+					"response": []
+				}
+			]
+		}
+	],
+	"variable": [
+		{
+			"key": "baseUrl",
+			"value": "http://localhost:8000",
+			"type": "string"
+		}
+	]
+}

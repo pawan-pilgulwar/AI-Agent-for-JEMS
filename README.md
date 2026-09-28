@@ -1,26 +1,25 @@
 # jems-agent-service
 
-A standalone microservice for the [Jems](https://jems-gilt.vercel.app) platform, adding four
-capabilities the main Next.js app doesn't have yet:
+A high-performance Multi-Agent AI microservice for the **JEMS** platform (AI-Powered Academia-Industry Collaboration Platform, SIH 2026).
 
-1. **`POST /learning-path`** — given a student's profile + resume + career objective, generates
-   a personalized, ordered learning path closing their skill gaps, grounded in real job postings
-   where available.
-2. **`POST /match-candidates`** — given a job description and a candidate pool, ranks candidates
-   by fit using vector retrieval + LLM reasoning, grounded in stored company/role data where
-   available.
-3. **`POST /ingest-company`** — given a company name + website, scrapes its own site for
-   company info and current job postings and upserts them into MongoDB. This is the data source
-   the RAG grounding in the other three endpoints draws from.
-4. **`POST /suggest-jobs-for-candidate`** — the reverse of matching: given a candidate's
-   profile/resume, retrieves and explains the best-fit real open roles across all ingested
-   companies.
+Built with **CrewAI**, **LiteLLM**, **Ollama**, **FastAPI**, and **MongoDB Atlas Vector Search**, this service coordinates 5 core AI agents + 1 Web Scraper Agent to power the complete skill-to-employment pipeline:
 
-It is called by the existing Next.js backend over HTTP and is not intended to be exposed
-publicly — auth is handled upstream. It runs entirely on free/open-source components: no paid
-LLM, embedding, or search API keys are used anywhere.
+1. **Analysis Agent (Profile + Company Analysis)** — Analyzes student profiles against requirements from **BOTH** platform-registered companies and web-scraped company career pages. Identifies technical and soft skill gaps and calculates compatibility scores.
+2. **Roadmap Agent (Skill Gap -> Roadmap)** — Sequences identified gaps into chronological, milestone-driven learning roadmaps with realistic hours, deliverables, and role readiness targets.
+3. **Learning Agent (Resources & Training)** — Curates courses, documentation, industry certifications, portfolio projects, and Faculty Development Programs (FDPs) / institutional training modules.
+4. **Assessment Agent (Skill Validation)** — Generates cheat-resistant skill tests (MCQ, code analysis, scenarios), evaluates student submissions, and issues verified skill badges stored in MongoDB to combat fake resume claims.
+5. **Matching Agent (Job / Internship Matching)** — Two-way matching: matches candidates to jobs/internships for recruiters, recommends open opportunities to students across registered and scraped collections, and generates automated notification payloads.
+6. **Web Scraper Agent (Company & Careers Intelligence)** — Takes a list of companies, scrapes official websites and careers pages, extracts structured profiles and live job/internship postings, and stores them into a dedicated `scraped_companies` collection.
 
-## RAG grounding & anti-hallucination
+### Unified Orchestration Layer & Router
+- **`POST /orchestrate`** — Central entry point that routes incoming client/backend requests according to `request_type`, manages agent context, and can execute the complete end-to-end student pipeline.
+
+### Dual Collection Architecture in MongoDB Atlas
+- **`registered_companies`** & **`registered_job_postings`**: Populated by companies who register directly on the JEMS platform and post hiring requirements.
+- **`scraped_companies`** & **`scraped_job_postings`**: Populated by the Web Scraper Agent from external official company career portals.
+- **Analysis Agent & Matching Agent**: Vector-query and evaluate across **BOTH** collections simultaneously.
+
+## RAG Grounding & Anti-Hallucination
 
 The Path Builder, Requirements Analyzer, and Candidate Matcher agents originally reasoned purely
 from LLM knowledge, which meant they could invent skills, requirements, or job-market facts that
@@ -51,7 +50,7 @@ about a company, role, or skill requirement must be grounded in data retrieved b
    Playwright only if the static page looks empty (JS-rendered). Respects `robots.txt`, sets a
    descriptive User-Agent, and rate-limits requests per domain
    (`SCRAPE_RATE_LIMIT_SECONDS`). Never scrapes anything requiring login.
-3. **Extraction** (`crews/company_ingestion_crew.py`, one LLM agent, two tasks) — turns the
+3. **Extraction** (`crews/web_scraper_crew.py`, Web Scraper Agent) — turns the
    cleaned, boilerplate-stripped page text into structured company fields and a list of job
    postings. Extraction is strictly conservative: a field the scraped text doesn't state is left
    empty, never guessed.
@@ -108,28 +107,40 @@ scale.
 
 ```
 jems-agent-service/
-├── main.py                          # FastAPI app: all endpoints + /health
-├── config.py                        # pydantic-settings, env-driven config
+├── main.py                          # FastAPI app: /health and POST /orchestrate
+├── config.py                        # pydantic-settings, multi-model LLM configuration
 ├── crews/
-│   ├── learning_path_crew.py        # single-agent Crew (Path Builder), RAG-grounded
-│   ├── matching_crew.py             # Requirements Analyzer -> Candidate Matcher, RAG-grounded;
-│   │                                 # also run_job_suggestion_crew() for reverse matching
-│   └── company_ingestion_crew.py    # single-agent Crew (Company Intelligence), page text -> JSON
-├── agents/                          # CrewAI Agent factories, one per role
+│   ├── orchestrator.py              # MultiAgentOrchestrator: routes all requests & runs pipelines
+│   ├── analysis_crew.py             # Agent 1: Dual-company gap analysis crew
+│   ├── roadmap_crew.py              # Agent 2: Milestone roadmap generator crew
+│   ├── learning_crew.py             # Agent 3: Learning resources & FDP training crew
+│   ├── assessment_crew.py           # Agent 4: Skill test generation & evaluation crew
+│   ├── matching_crew.py             # Agent 5: Candidate-role two-way matching crew
+│   └── web_scraper_crew.py          # Agent 6: Company & careers batch scraping crew
+├── agents/                          # 6 specialized CrewAI Agent definitions
+│   ├── analysis_agent.py
+│   ├── roadmap_agent.py
+│   ├── learning_agent.py
+│   ├── assessment_agent.py
+│   ├── matching_agent.py
+│   └── web_scraper_agent.py
 ├── tools/
-│   ├── embedding_tool.py            # sentence-transformers wrapper (shared by everything)
-│   ├── vector_search_tool.py        # candidate $vectorSearch (matching Stage 1)
-│   ├── rag_retrieval_tool.py        # companies/job_postings $vectorSearch (grounding)
-│   ├── skill_gap_tool.py            # deterministic skill-gap diff (no LLM)
-│   ├── web_scraper_tool.py          # static + Playwright-fallback scraping, robots.txt-aware
-│   └── company_discovery_tool.py    # DuckDuckGo company-website lookup (no API key)
+│   ├── embedding_tool.py            # sentence-transformers wrapper (shared)
+│   ├── vector_search_tool.py        # candidate $vectorSearch
+│   ├── rag_retrieval_tool.py        # dual-collection (registered & scraped) vector search
+│   ├── skill_gap_tool.py            # deterministic skill-gap diff
+│   ├── web_scraper_tool.py          # HTTP & Playwright web scraper
+│   └── company_discovery_tool.py    # Autonomous domain lookup
 ├── db/
-│   ├── mongo_client.py               # motor client + vector index setup for all 3 collections
-│   ├── company_store.py              # idempotent upsert logic for companies/job_postings
-│   └── results_store.py              # best-effort audit logging
-├── models/schemas.py                 # Pydantic v2 request/response models
-└── tests/                            # unit tests, LLM + MongoDB + scraping fully mocked
+│   ├── mongo_client.py              # motor client, collection names & vector index setup
+│   ├── company_store.py             # upserts for registered & scraped companies
+│   ├── roadmap_store.py             # caching for roadmaps & learning recommendations
+│   ├── assessment_store.py          # tests, evaluations, and verified skill badges
+│   └── results_store.py             # audit logging
+├── models/schemas.py                # Pydantic v2 request/response models & request types
+└── tests/test_agents.py             # 100% passing test suite for all agent routes & caching
 ```
+
 
 ## Setup
 

@@ -22,7 +22,7 @@ services:
 
   jems-agent:
     # build: .
-    image: pawan0603/jems-agent:latest
+    image: pawan0603/jems-agent:v1
     ports:
       - "8000:8000"
     env_file:
