@@ -2,8 +2,7 @@ import json
 
 from crewai import Crew, Process, Task
 
-from agents.candidate_matcher_agent import build_candidate_matcher_agent
-from agents.requirements_analyzer_agent import build_requirements_analyzer_agent
+from agents.matching_agent import build_matching_agent
 from crews._json_utils import extract_json_object
 
 REQUIREMENTS_TASK_DESCRIPTION = """\
@@ -38,10 +37,10 @@ MATCHING_TASK_DESCRIPTION = """\
 Using the parsed job requirements from the previous task as context, score \
 each of the following shortlisted candidates for fit against the role. These \
 candidates were already narrowed down from the full pool by a vector \
-similarity search on their profile text -- your job is the final, nuanced \
-judgment on fit, not re-searching the pool.
+similarity search against the job description -- your job is to reason about \
+depth of fit, not re-search.
 
-Shortlisted candidates (JSON list, each with user_id and profile text/skills):
+Shortlisted candidates:
 {candidates_json}
 
 {grounding_block}
@@ -138,8 +137,7 @@ def run_matching_crew(
     company_context: dict | None = None,
     retrieved_context: list[dict] | None = None,
 ) -> dict:
-    requirements_agent = build_requirements_analyzer_agent()
-    matcher_agent = build_candidate_matcher_agent()
+    matcher_agent = build_matching_agent()
     retrieved_context = retrieved_context or []
 
     requirements_task = Task(
@@ -149,7 +147,7 @@ def run_matching_crew(
             company_context_block=_company_context_block(company_context),
         ),
         expected_output="A single JSON object with required_skills, nice_to_have_skills, experience_level, role_category.",
-        agent=requirements_agent,
+        agent=matcher_agent,
     )
 
     matching_task = Task(
@@ -163,7 +161,7 @@ def run_matching_crew(
     )
 
     crew = Crew(
-        agents=[requirements_agent, matcher_agent],
+        agents=[matcher_agent],
         tasks=[requirements_task, matching_task],
         process=Process.sequential,
         verbose=False,
@@ -184,8 +182,8 @@ def run_matching_crew(
 def run_job_suggestion_crew(candidate_profile: dict, resume_text: str, retrieved_jobs: list[dict]) -> dict:
     """Reverse-match: given real open postings already retrieved via RAG
     (tools/rag_retrieval_tool.py), explain why each is a fit for this
-    candidate. Reuses the Candidate Matcher Agent's reasoning stage."""
-    matcher_agent = build_candidate_matcher_agent()
+    candidate using the Matching Agent."""
+    matcher_agent = build_matching_agent()
 
     task = Task(
         description=JOB_SUGGESTION_TASK_DESCRIPTION.format(
@@ -202,3 +200,4 @@ def run_job_suggestion_crew(candidate_profile: dict, resume_text: str, retrieved
 
     parsed = extract_json_object(str(task.output))
     return {"suggested_jobs": parsed.get("suggested_jobs", [])}
+

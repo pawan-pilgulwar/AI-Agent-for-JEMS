@@ -22,6 +22,10 @@ from db.mongo_client import (
     COMPANY_EMBEDDING_FIELD,
     JOB_EMBEDDING_FIELD,
     JOB_POSTINGS_COLLECTION,
+    REGISTERED_COMPANIES_COLLECTION,
+    REGISTERED_JOBS_COLLECTION,
+    SCRAPED_COMPANIES_COLLECTION,
+    SCRAPED_JOBS_COLLECTION,
     get_database,
 )
 from tools.embedding_tool import EmbeddingTool
@@ -42,18 +46,21 @@ def job_dedupe_key(domain: str, title: str, source_url: str) -> str:
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
-async def list_known_domains() -> set[str]:
-    """All company domains already ingested -- used by discovery mode
-    (tools/company_discovery_tool.py::discover_next_company) so repeated
-    no-input /ingest-company calls surface new companies instead of
-    re-discovering the same one."""
+async def list_known_domains(collection_name: str = SCRAPED_COMPANIES_COLLECTION) -> set[str]:
+    """Company domains already ingested/scraped -- used by discovery mode."""
     db = get_database()
-    collection = db[COMPANIES_COLLECTION]
+    collection = db[collection_name]
     domains = await collection.distinct("domain")
+    # Also check legacy/registered collections to avoid duplicate scraping
+    if collection_name == SCRAPED_COMPANIES_COLLECTION:
+        reg_domains = await db[REGISTERED_COMPANIES_COLLECTION].distinct("domain")
+        leg_domains = await db[COMPANIES_COLLECTION].distinct("domain")
+        return set(domains) | set(reg_domains) | set(leg_domains)
     return set(domains)
 
 
-async def upsert_company(
+async def _upsert_company_to_collection(
+    collection_name: str,
     *,
     company_name: str,
     website_url: str,
@@ -62,18 +69,17 @@ async def upsert_company(
     tech_stack: list[str],
     locations: list[str],
     description: str,
+    source_type: str = "scraped",
+    contact_email: str | None = None,
 ) -> tuple[str, Literal["created", "updated", "unchanged"]]:
-    """Insert or update the company document keyed by domain. Re-embeds only
-    if the description text actually changed (embeddings are the expensive
-    part; the other fields are cheap metadata)."""
     domain = normalize_domain(website_url)
     db = get_database()
-    collection = db[COMPANIES_COLLECTION]
+    collection = db[collection_name]
 
     existing = await collection.find_one({"_id": domain})
     now = datetime.now(timezone.utc)
 
-    fields = {
+    fields: dict[str, Any] = {
         "company_name": company_name,
         "website_url": website_url,
         "domain": domain,
@@ -82,10 +88,14 @@ async def upsert_company(
         "tech_stack": tech_stack,
         "locations": locations,
         "description": description,
-        "last_scraped_at": now,
+        "source_type": source_type,
+        "updated_at": now,
     }
+    if contact_email:
+        fields["contact_email"] = contact_email
 
     if existing is None:
+        fields["created_at"] = now
         embedder = EmbeddingTool()
         fields[COMPANY_EMBEDDING_FIELD] = embedder.embed(description) if description else []
         await collection.insert_one({"_id": domain, **fields})
@@ -102,17 +112,105 @@ async def upsert_company(
     return domain, "updated" if changed else "unchanged"
 
 
-async def upsert_job_postings(
-    *, company_id: str, company_name: str, postings: list[dict[str, Any]]
-) -> tuple[int, int, int, list[dict[str, Any]]]:
-    """Insert/update each posting keyed by (company, title, source_url), then
-    mark any previously-open posting for this company that didn't reappear in
-    this scrape as "closed" (never delete -- match history references it).
+async def upsert_scraped_company(
+    *,
+    company_name: str,
+    website_url: str,
+    industry: str,
+    company_size: str,
+    tech_stack: list[str],
+    locations: list[str],
+    description: str,
+) -> tuple[str, Literal["created", "updated", "unchanged"]]:
+    """Upsert company into dedicated `scraped_companies` collection."""
+    res = await _upsert_company_to_collection(
+        SCRAPED_COMPANIES_COLLECTION,
+        company_name=company_name,
+        website_url=website_url,
+        industry=industry,
+        company_size=company_size,
+        tech_stack=tech_stack,
+        locations=locations,
+        description=description,
+        source_type="scraped",
+    )
+    # Also keep legacy COMPANIES_COLLECTION in sync for backward compatibility
+    try:
+        await _upsert_company_to_collection(
+            COMPANIES_COLLECTION,
+            company_name=company_name,
+            website_url=website_url,
+            industry=industry,
+            company_size=company_size,
+            tech_stack=tech_stack,
+            locations=locations,
+            description=description,
+            source_type="scraped",
+        )
+    except Exception:
+        logger.warning("Could not sync to legacy companies collection", exc_info=True)
+    return res
 
-    Returns (jobs_created, jobs_updated, jobs_closed, job_summaries).
-    """
+
+async def upsert_registered_company(
+    *,
+    company_name: str,
+    website_url: str,
+    industry: str,
+    company_size: str,
+    tech_stack: list[str],
+    locations: list[str],
+    description: str,
+    contact_email: str | None = None,
+) -> tuple[str, Literal["created", "updated", "unchanged"]]:
+    """Upsert company into dedicated `registered_companies` collection for companies
+    who registered on the platform."""
+    return await _upsert_company_to_collection(
+        REGISTERED_COMPANIES_COLLECTION,
+        company_name=company_name,
+        website_url=website_url,
+        industry=industry,
+        company_size=company_size,
+        tech_stack=tech_stack,
+        locations=locations,
+        description=description,
+        source_type="registered",
+        contact_email=contact_email,
+    )
+
+
+# Backward-compatible alias
+async def upsert_company(
+    *,
+    company_name: str,
+    website_url: str,
+    industry: str,
+    company_size: str,
+    tech_stack: list[str],
+    locations: list[str],
+    description: str,
+) -> tuple[str, Literal["created", "updated", "unchanged"]]:
+    return await upsert_scraped_company(
+        company_name=company_name,
+        website_url=website_url,
+        industry=industry,
+        company_size=company_size,
+        tech_stack=tech_stack,
+        locations=locations,
+        description=description,
+    )
+
+
+async def _upsert_job_postings_to_collection(
+    collection_name: str,
+    *,
+    company_id: str,
+    company_name: str,
+    postings: list[dict[str, Any]],
+    source_type: str = "scraped",
+) -> tuple[int, int, int, list[dict[str, Any]]]:
     db = get_database()
-    collection = db[JOB_POSTINGS_COLLECTION]
+    collection = db[collection_name]
     embedder = EmbeddingTool()
     now = datetime.now(timezone.utc)
 
@@ -122,15 +220,15 @@ async def upsert_job_postings(
 
     for posting in postings:
         title = (posting.get("title") or "").strip()
-        source_url = (posting.get("source_url") or "").strip()
-        if not title or not source_url:
+        source_url = (posting.get("source_url") or "").strip() or f"https://platform.jems/{company_id}/{title.replace(' ', '-').lower()}"
+        if not title:
             continue
 
         key = job_dedupe_key(company_id, title, source_url)
         seen_keys.add(key)
         description = posting.get("description", "")
 
-        fields = {
+        fields: dict[str, Any] = {
             "company_id": company_id,
             "company_name": company_name,
             "title": title,
@@ -139,9 +237,10 @@ async def upsert_job_postings(
             "nice_to_have_skills": posting.get("nice_to_have_skills", []),
             "experience_level": posting.get("experience_level", ""),
             "location": posting.get("location", ""),
-            "employment_type": posting.get("employment_type", ""),
+            "employment_type": posting.get("employment_type", "full-time"),
             "posted_date": posting.get("posted_date"),
             "source_url": source_url,
+            "source_type": source_type,
             "status": "open",
             "last_seen_at": now,
         }
@@ -164,9 +263,58 @@ async def upsert_job_postings(
         summaries.append({"id": key, "title": title, "status": "open"})
 
     closed = 0
-    async for doc in collection.find({"company_id": company_id, "status": "open"}):
-        if doc["_id"] not in seen_keys:
-            await collection.update_one({"_id": doc["_id"]}, {"$set": {"status": "closed"}})
-            closed += 1
+    # For scraped postings, mark ones no longer seen as closed
+    if source_type == "scraped":
+        async for doc in collection.find({"company_id": company_id, "status": "open"}):
+            if doc["_id"] not in seen_keys:
+                await collection.update_one({"_id": doc["_id"]}, {"$set": {"status": "closed"}})
+                closed += 1
 
     return created, updated, closed, summaries
+
+
+async def upsert_scraped_job_postings(
+    *, company_id: str, company_name: str, postings: list[dict[str, Any]]
+) -> tuple[int, int, int, list[dict[str, Any]]]:
+    """Upsert job postings into dedicated `scraped_job_postings` collection."""
+    res = await _upsert_job_postings_to_collection(
+        SCRAPED_JOBS_COLLECTION,
+        company_id=company_id,
+        company_name=company_name,
+        postings=postings,
+        source_type="scraped",
+    )
+    # Also sync to legacy JOB_POSTINGS_COLLECTION
+    try:
+        await _upsert_job_postings_to_collection(
+            JOB_POSTINGS_COLLECTION,
+            company_id=company_id,
+            company_name=company_name,
+            postings=postings,
+            source_type="scraped",
+        )
+    except Exception:
+        logger.warning("Could not sync to legacy job postings collection", exc_info=True)
+    return res
+
+
+async def upsert_registered_job_postings(
+    *, company_id: str, company_name: str, postings: list[dict[str, Any]]
+) -> tuple[int, int, int, list[dict[str, Any]]]:
+    """Upsert job postings into dedicated `registered_job_postings` collection."""
+    return await _upsert_job_postings_to_collection(
+        REGISTERED_JOBS_COLLECTION,
+        company_id=company_id,
+        company_name=company_name,
+        postings=postings,
+        source_type="registered",
+    )
+
+
+# Backward-compatible alias
+async def upsert_job_postings(
+    *, company_id: str, company_name: str, postings: list[dict[str, Any]]
+) -> tuple[int, int, int, list[dict[str, Any]]]:
+    return await upsert_scraped_job_postings(
+        company_id=company_id, company_name=company_name, postings=postings
+    )

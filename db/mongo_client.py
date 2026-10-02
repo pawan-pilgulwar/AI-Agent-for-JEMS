@@ -28,6 +28,22 @@ CANDIDATES_COLLECTION = "candidates"
 EMBEDDING_FIELD = "profile_embedding"
 EMBEDDING_DIMENSIONS = 384  # all-MiniLM-L6-v2 output size
 
+# Distinct collections for platform-registered vs webscraped companies
+REGISTERED_COMPANIES_COLLECTION = "registered_companies"
+REGISTERED_JOBS_COLLECTION = "registered_job_postings"
+
+SCRAPED_COMPANIES_COLLECTION = "scraped_companies"
+SCRAPED_JOBS_COLLECTION = "scraped_job_postings"
+
+# Skill validation and assessments collections
+ASSESSMENTS_COLLECTION = "assessments"
+VERIFIED_SKILLS_COLLECTION = "verified_skills"
+
+# Caching collections for instant retrieval of Roadmap and Learning Agent outputs
+STUDENT_ROADMAPS_COLLECTION = "student_roadmaps"
+LEARNING_RECOMMENDATIONS_COLLECTION = "learning_recommendations"
+
+# Legacy aliases for backward compatibility
 COMPANIES_COLLECTION = "companies"
 COMPANY_EMBEDDING_FIELD = "profile_embedding"
 
@@ -95,13 +111,44 @@ async def _ensure_single_index(
 
 
 async def ensure_vector_index() -> None:
-    """Best-effort creation of all three Atlas Vector Search indexes on startup."""
+    """Best-effort creation of Atlas Vector Search indexes on startup across all collections."""
     settings = get_settings()
     db = get_database()
 
+    # Candidate vector index
     await _ensure_single_index(
         db[CANDIDATES_COLLECTION], settings.vector_index_name, EMBEDDING_FIELD, ["user_id"]
     )
+
+    # Registered companies and jobs vector indexes
+    await _ensure_single_index(
+        db[REGISTERED_COMPANIES_COLLECTION],
+        settings.vector_index_name_registered_companies,
+        COMPANY_EMBEDDING_FIELD,
+        ["domain"],
+    )
+    await _ensure_single_index(
+        db[REGISTERED_JOBS_COLLECTION],
+        settings.vector_index_name_registered_jobs,
+        JOB_EMBEDDING_FIELD,
+        ["status", "company_id"],
+    )
+
+    # Scraped companies and jobs vector indexes
+    await _ensure_single_index(
+        db[SCRAPED_COMPANIES_COLLECTION],
+        settings.vector_index_name_scraped_companies,
+        COMPANY_EMBEDDING_FIELD,
+        ["domain"],
+    )
+    await _ensure_single_index(
+        db[SCRAPED_JOBS_COLLECTION],
+        settings.vector_index_name_scraped_jobs,
+        JOB_EMBEDDING_FIELD,
+        ["status", "company_id"],
+    )
+
+    # Legacy collections (if still in use)
     await _ensure_single_index(
         db[COMPANIES_COLLECTION],
         settings.vector_index_name_companies,
