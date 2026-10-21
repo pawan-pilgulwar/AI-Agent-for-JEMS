@@ -1,0 +1,73 @@
+services:
+  mongo:
+    image: mongo:8
+    restart: unless-stopped
+    volumes:
+      - mongo_data:/data/db
+    networks: [appnet]
+
+  judge0-server:
+    image: judge0/judge0:1.13.1
+    restart: unless-stopped
+    privileged: true
+    env_file:
+      - judge0.conf
+    volumes:
+      # Java commands tuned for per-process memory limits (cgroup v2 workaround, see judge0.conf).
+      # Judge0 re-seeds languages from this file on every start.
+      - ./judge0/active.rb:/api/db/languages/active.rb:ro
+    ports:
+      - "127.0.0.1:2358:2358"
+    depends_on: [db, redis]
+    networks: [appnet]
+
+  judge0-worker:
+    image: judge0/judge0:1.13.1
+    command: ["./scripts/workers"]
+    restart: unless-stopped
+    privileged: true
+    env_file:
+      - judge0.conf
+    volumes:
+      # Java commands tuned for per-process memory limits (cgroup v2 workaround, see judge0.conf).
+      # Judge0 re-seeds languages from this file on every start.
+      - ./judge0/active.rb:/api/db/languages/active.rb:ro
+    depends_on: [db, redis]
+    networks: [appnet]
+
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: judge0
+      POSTGRES_USER: judge0
+      POSTGRES_PASSWORD: change_me_pg
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    networks: [appnet]
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--requirepass", "change_me_redis"]
+    restart: unless-stopped
+    networks: [appnet]
+
+  analyzer:
+    # build: ./analyzer
+    image: pawan0603/jems-agent:v2
+    restart: unless-stopped
+    environment:
+      LLM_API_KEYS: ${LLM_API_KEYS:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      JUDGE0_URL: http://judge0-server:2358
+    ports:
+      - "127.0.0.1:8080:8080"
+    depends_on: [judge0-server]
+    networks: [appnet]
+
+volumes:
+  mongo_data:
+  pg_data:
+
+networks:
+  appnet:

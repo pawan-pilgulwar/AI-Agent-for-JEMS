@@ -1,0 +1,647 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Exponentor Console</title>
+<style>
+:root{
+  --bg:#f6f7f9; --panel:#fff; --panel2:#f1f3f6; --text:#1b1f24; --muted:#5f6b7a; --border:#dde2e8;
+  --accent:#3b5bdb; --accent-soft:#e7ecff; --ok:#2b8a3e; --ok-soft:#e3f6e8; --bad:#c92a2a; --bad-soft:#fdeaea;
+  --warn:#b35c00; --warn-soft:#fff3e0; --code:#0f1720; --code-text:#e6edf3;
+  --mono: ui-monospace, "Cascadia Code", Consolas, "SF Mono", Menlo, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#0e1116; --panel:#161b22; --panel2:#1d232c; --text:#e6edf3; --muted:#9aa7b4; --border:#2b333d;
+    --accent:#7c9cff; --accent-soft:#1e2a4a; --ok:#57c26f; --ok-soft:#14301d; --bad:#ff7b7b; --bad-soft:#3a1717;
+    --warn:#f0a35a; --warn-soft:#3a2810; --code:#0a0d12; --code-text:#e6edf3;
+    color-scheme: dark;
+  }
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+header{position:sticky;top:0;z-index:5;display:flex;align-items:center;gap:16px;padding:10px 20px;background:var(--panel);border-bottom:1px solid var(--border)}
+header h1{font-size:16px;margin:0;font-weight:650}
+header .sp{flex:1}
+.pill{display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:999px;font-size:12px;background:var(--panel2);border:1px solid var(--border)}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--muted)}
+.dot.ok{background:var(--ok)} .dot.bad{background:var(--bad)}
+.layout{display:grid;grid-template-columns:240px 1fr;min-height:calc(100vh - 50px)}
+nav{border-right:1px solid var(--border);background:var(--panel);padding:12px 8px;overflow:auto}
+nav .grp{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:14px 10px 6px}
+nav button{display:block;width:100%;text-align:left;border:0;background:none;color:var(--text);padding:7px 10px;border-radius:6px;cursor:pointer;font:inherit}
+nav button:hover{background:var(--panel2)}
+nav button.active{background:var(--accent-soft);color:var(--accent);font-weight:600}
+nav .m{font:11px var(--mono);color:var(--muted);display:block}
+main{padding:20px 24px 60px;min-width:0}
+.page{display:none;max-width:1200px} .page.active{display:block}
+.page h2{margin:0 0 4px;font-size:20px}
+.ep{font:13px var(--mono);color:var(--muted);margin-bottom:6px}
+.ep b{color:var(--accent)}
+.desc{color:var(--muted);margin:0 0 16px;max-width:800px}
+.cols{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.2fr);gap:18px;align-items:start}
+.card{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:16px}
+.card h3{margin:0 0 10px;font-size:14px}
+label{display:block;font-weight:600;font-size:12px;margin:10px 0 4px;color:var(--muted)}
+input[type=text],input[type=number],select,textarea{width:100%;padding:7px 9px;border:1px solid var(--border);border-radius:6px;background:var(--panel);color:var(--text);font:inherit}
+textarea{resize:vertical;min-height:70px}
+textarea.code,textarea.json{font:13px/1.45 var(--mono);background:var(--code);color:var(--code-text);min-height:220px;tab-size:4;white-space:pre}
+textarea.json{min-height:260px}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:end}
+.row>*{flex:1;min-width:110px}
+.btn{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--border);background:var(--panel2);color:var(--text);padding:7px 14px;border-radius:6px;cursor:pointer;font:inherit;font-weight:550}
+.btn:hover{border-color:var(--accent)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.small{padding:3px 9px;font-size:12px}
+.btn:disabled{opacity:.55;cursor:wait}
+.actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:14px}
+.hint{font-size:12px;color:var(--muted)}
+.toggle{font-size:12px;color:var(--muted);display:inline-flex;gap:6px;align-items:center;cursor:pointer;font-weight:500;margin:0}
+.resp-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+.tabs{display:flex;gap:2px;background:var(--panel2);border-radius:7px;padding:2px;margin-left:auto}
+.tabs button{border:0;background:none;color:var(--muted);padding:4px 10px;border-radius:5px;cursor:pointer;font:inherit;font-size:12px}
+.tabs button.on{background:var(--panel);color:var(--text);box-shadow:0 1px 2px rgba(0,0,0,.12)}
+pre.raw{margin:0;background:var(--code);color:var(--code-text);padding:12px;border-radius:8px;overflow:auto;max-height:70vh;font:12.5px/1.5 var(--mono)}
+.empty{color:var(--muted);padding:30px;text-align:center;border:1px dashed var(--border);border-radius:8px}
+.badge{display:inline-block;padding:1px 8px;border-radius:999px;font-size:11.5px;font-weight:600;background:var(--panel2);color:var(--muted);border:1px solid var(--border);white-space:nowrap}
+.badge.ok{background:var(--ok-soft);color:var(--ok);border-color:transparent}
+.badge.bad{background:var(--bad-soft);color:var(--bad);border-color:transparent}
+.badge.warn{background:var(--warn-soft);color:var(--warn);border-color:transparent}
+.badge.acc{background:var(--accent-soft);color:var(--accent);border-color:transparent}
+.chips{display:flex;flex-wrap:wrap;gap:5px}
+.chip{font-size:12px;padding:2px 8px;border-radius:5px;background:var(--panel2);border:1px solid var(--border)}
+.item{border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:10px;background:var(--panel)}
+.item .t{font-weight:600;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.muted{color:var(--muted)}
+.box{border-radius:8px;padding:10px 12px;margin:8px 0}
+.box.ok{background:var(--ok-soft)} .box.bad{background:var(--bad-soft)} .box.warn{background:var(--warn-soft)} .box.acc{background:var(--accent-soft)}
+.bar{height:8px;background:var(--panel2);border-radius:4px;overflow:hidden;min-width:80px}
+.bar>i{display:block;height:100%;background:var(--accent)}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--border);vertical-align:top}
+th{color:var(--muted);font-weight:600;font-size:12px}
+.tbl{overflow-x:auto}
+.opt{display:flex;gap:8px;align-items:flex-start;padding:6px 8px;border-radius:6px;border:1px solid var(--border);margin:5px 0;cursor:pointer}
+.opt:hover{border-color:var(--accent)}
+.opt.correct{background:var(--ok-soft);border-color:var(--ok)}
+.opt.wrong{background:var(--bad-soft);border-color:var(--bad)}
+.opt input{margin-top:3px}
+.score-big{font-size:34px;font-weight:700;line-height:1}
+.summary{display:flex;gap:24px;align-items:center;flex-wrap:wrap}
+.timeline{border-left:2px solid var(--border);margin-left:8px;padding-left:18px}
+.timeline .item{position:relative}
+.timeline .item:before{content:"";position:absolute;left:-26px;top:16px;width:12px;height:12px;border-radius:50%;background:var(--accent);border:2px solid var(--panel)}
+.spin{width:14px;height:14px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:sp .8s linear infinite;display:inline-block}
+@keyframes sp{to{transform:rotate(360deg)}}
+.out{background:var(--code);color:var(--code-text);padding:10px;border-radius:6px;font:12.5px/1.45 var(--mono);white-space:pre-wrap;margin:4px 0 8px;max-height:300px;overflow:auto}
+.out.err{color:#ff9b9b}
+.kp{display:flex;gap:6px;margin-bottom:6px} .kp input[type=text]{flex:1} .kp input[type=number]{width:70px;flex:none}
+.q-head{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px}
+.sticky-submit{position:sticky;bottom:0;background:var(--panel);border-top:1px solid var(--border);padding:12px 0;margin-top:10px}
+@media (max-width:1000px){.cols{grid-template-columns:1fr}}
+@media (max-width:720px){.layout{grid-template-columns:1fr} nav{border-right:0;border-bottom:1px solid var(--border);display:flex;overflow-x:auto;gap:4px} nav .grp{display:none} nav button{white-space:nowrap;width:auto} main{padding:16px}}
+</style>
+</head>
+<body>
+<header>
+  <h1>Exponentor API Console</h1>
+  <span class="pill" title="GET /health"><span class="dot" id="hdot"></span><span id="htext">checking…</span></span>
+  <span class="sp"></span>
+  <span class="hint" id="baseinfo"></span>
+  <a class="btn small" href="/docs" target="_blank">Swagger /docs</a>
+</header>
+<div class="layout">
+<nav id="nav"></nav>
+<main id="main"></main>
+</div>
+
+<script>
+// ---------------------------------------------------------------- helpers
+const BASE = location.protocol.startsWith('http') ? '' : 'http://localhost:8080';
+const JUDGE0 = 'http://localhost:2358';
+const $ = (s, r=document) => r.querySelector(s);
+const $$ = (s, r=document) => [...r.querySelectorAll(s)];
+const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const list = s => String(s||'').split(/[,\n]/).map(x=>x.trim()).filter(Boolean);
+const levelBadge = l => `<span class="badge ${l==='basic'?'ok':l==='advanced'?'bad':'warn'}">${esc(l)}</span>`;
+const diffBadge = d => d ? `<span class="badge ${d==='easy'?'ok':d==='hard'?'bad':'warn'}">${esc(d)}</span>` : '';
+const normalize = t => (t||'').replace(/\r\n?/g,'\n').trim().split('\n').map(l=>l.trimEnd()).join('\n');
+const state = { paper: null, prereqs: null };
+
+const TEMPLATES = {
+  python: 'n = int(input())\nprint(n * 2)\n',
+  java: 'import java.util.*;\n\npublic class Main {\n    public static void main(String[] args) {\n        Scanner sc = new Scanner(System.in);\n        int n = sc.nextInt();\n        System.out.println(n * 2);\n    }\n}\n',
+  cpp: '#include <bits/stdc++.h>\nusing namespace std;\n\nint main() {\n    long long n;\n    cin >> n;\n    cout << n * 2 << endl;\n    return 0;\n}\n',
+  c: '#include <stdio.h>\n\nint main(void) {\n    long long n;\n    scanf("%lld", &n);\n    printf("%lld\\n", n * 2);\n    return 0;\n}\n',
+  javascript: 'const input = require("fs").readFileSync(0, "utf8").trim().split(/\\s+/);\nconst n = Number(input[0]);\nconsole.log(n * 2);\n',
+};
+const LANGS = Object.keys(TEMPLATES);
+const STARTERS = {
+  python: 'import sys\ndata = sys.stdin.read().split()\n\n# write your solution here\n',
+  java: 'import java.util.*;\n\npublic class Main {\n    public static void main(String[] args) {\n        Scanner sc = new Scanner(System.in);\n        // write your solution here\n    }\n}\n',
+  cpp: '#include <bits/stdc++.h>\nusing namespace std;\n\nint main() {\n    // write your solution here\n    return 0;\n}\n',
+  c: '#include <stdio.h>\n\nint main(void) {\n    // write your solution here\n    return 0;\n}\n',
+  javascript: 'const data = require("fs").readFileSync(0, "utf8").trim().split(/\\s+/);\n\n// write your solution here\n',
+};
+
+const FIXES = {
+  422: 'Invalid or missing field. Check double quotes, no trailing commas, required fields, type names and language names.',
+  413: 'Code (max 20,000 chars) or input (max 10,000 chars) is too long.',
+  502: 'Judge0 not reachable. Run "docker compose ps"; check judge0-server and judge0-worker, and JUDGE0_URL.',
+  500: 'Internal error. Run "docker compose logs analyzer --tail 30". Often the Gemini API key is missing, invalid, or out of quota.',
+  0: 'Could not connect. Is the analyzer running? "docker compose up -d --build analyzer"',
+};
+
+async function call(method, url, body, timeoutMs=600000){
+  const ctl = new AbortController();
+  const tm = setTimeout(()=>ctl.abort(), timeoutMs);
+  const t0 = performance.now();
+  try{
+    const r = await fetch(url, {method, signal: ctl.signal,
+      headers: body!==undefined ? {'Content-Type':'application/json'} : {},
+      body: body!==undefined ? (typeof body==='string'? body : JSON.stringify(body)) : undefined});
+    const txt = await r.text();
+    let data; try{ data = JSON.parse(txt) }catch{ data = txt }
+    return {ok:r.ok, status:r.status, data, ms: performance.now()-t0};
+  }catch(e){
+    return {ok:false, status:0, data:{error: e.name==='AbortError' ? 'Timed out after '+timeoutMs/1000+'s' : String(e.message||e)}, ms: performance.now()-t0};
+  }finally{ clearTimeout(tm) }
+}
+
+function tabKeys(ta){
+  ta.addEventListener('keydown', e=>{
+    if(e.key==='Tab'){ e.preventDefault(); const s=ta.selectionStart, en=ta.selectionEnd;
+      ta.value = ta.value.slice(0,s)+'    '+ta.value.slice(en); ta.selectionStart=ta.selectionEnd=s+4; }
+  });
+}
+
+// ---------------------------------------------------------------- response panel
+function respPanel(host){
+  host.innerHTML = `<div class="card"><div class="resp-head"><h3 style="margin:0">Response</h3><span class="rs"></span>
+    <div class="tabs"><button data-v="pretty" class="on">Pretty</button><button data-v="raw">Raw JSON</button></div>
+    <button class="btn small cp" title="Copy JSON">Copy</button></div>
+    <div class="pv"><div class="empty">Send a request to see the result here.</div></div><pre class="raw" hidden></pre></div>`;
+  const rs=$('.rs',host), pv=$('.pv',host), raw=$('.raw',host);
+  let timer=null, last=null;
+  $$('.tabs button',host).forEach(b=>b.onclick=()=>{ $$('.tabs button',host).forEach(x=>x.classList.toggle('on',x===b));
+    pv.hidden = b.dataset.v!=='pretty'; raw.hidden = b.dataset.v!=='raw'; });
+  $('.cp',host).onclick=()=>{ if(last!==null) navigator.clipboard?.writeText(JSON.stringify(last,null,2)); };
+  return {
+    loading(msg){ const t0=Date.now(); clearInterval(timer);
+      rs.innerHTML=`<span class="badge acc"><span class="spin"></span> <span class="el">0s</span></span>`;
+      pv.innerHTML=`<div class="empty"><span class="spin"></span> ${esc(msg||'Waiting for the server…')}</div>`;
+      timer=setInterval(()=>{ const el=$('.el',rs); if(el) el.textContent=Math.round((Date.now()-t0)/1000)+'s'; },500); },
+    show(res, render){ clearInterval(timer); last=res.data;
+      rs.innerHTML=`<span class="badge ${res.ok?'ok':'bad'}">${res.status||'no connection'}</span> <span class="hint">${(res.ms/1000).toFixed(1)}s</span>`;
+      raw.textContent = typeof res.data==='string'? res.data : JSON.stringify(res.data,null,2);
+      if(!res.ok){ pv.innerHTML = renderError(res); return; }
+      try{ pv.innerHTML=''; const out = render ? render(res.data, pv) : null;
+        if(typeof out==='string') pv.innerHTML=out; else if(out===null && !pv.childNodes.length) pv.innerHTML=`<pre class="raw">${esc(raw.textContent)}</pre>`; }
+      catch(e){ console.error(e); pv.innerHTML=`<div class="box warn">Could not render this response nicely (${esc(e.message)}). See Raw JSON.</div><pre class="raw">${esc(raw.textContent)}</pre>`; }
+    },
+  };
+}
+function renderError(res){
+  const d=res.data; let msg;
+  if(d && Array.isArray(d.detail)) msg = d.detail.map(x=>`<li><code>${esc((x.loc||[]).join('.'))}</code>: ${esc(x.msg)}</li>`).join('');
+  else if(d && d.detail) msg = `<li>${esc(d.detail)}</li>`;
+  else msg = `<li>${esc(typeof d==='string'? d.slice(0,800) : JSON.stringify(d))}</li>`;
+  const detail = String((d && d.detail) || '');
+  let fix = FIXES[res.status] || '';
+  if (res.status === 502 && detail.startsWith('LLM')) {   // 502 from the Gemini side, not Judge0
+    fix = /429|rate limit|quota/i.test(detail)
+      ? 'Gemini rate limit or quota reached. Wait a minute and retry, add more keys to LLM_API_KEYS, or lower LLM_MAX_CONCURRENCY.'
+      : 'Gemini refused the request. Read the message above: check the API key, LLM_MODEL and fallback model names.';
+  }
+  return `<div class="box bad"><b>Request failed${res.status?' ('+res.status+')':''}</b><ul style="margin:6px 0 0;padding-left:18px">${msg}</ul></div>${fix?`<div class="box warn"><b>Likely fix:</b> ${esc(fix)}</div>`:''}`;
+}
+
+// ---------------------------------------------------------------- page builder
+// Each page: form (friendly fields) <-> JSON editor, Send, response panel.
+const PAGES = [];
+function page(cfg){ PAGES.push(cfg); }
+
+function buildPage(cfg){
+  const el=document.createElement('section'); el.className='page'; el.id='p-'+cfg.id;
+  el.innerHTML = `<h2>${esc(cfg.title)}</h2><div class="ep"><b>${cfg.method}</b> ${esc(cfg.url||cfg.path)}</div><p class="desc">${cfg.desc}</p>
+    <div class="cols"><div class="card req"><div class="resp-head"><h3 style="margin:0">Request</h3>
+      ${cfg.form && cfg.method!=='GET' ? `<label class="toggle" style="margin-left:auto"><input type="checkbox" class="jm"> Edit raw JSON</label>`:''}</div>
+      <div class="form"></div><div class="jwrap" ${cfg.form?'hidden':''}>${cfg.method!=='GET'?`<textarea class="json" spellcheck="false"></textarea>`:''}</div>
+      <div class="actions"><button class="btn primary send">Send request</button>${cfg.method!=='GET'?'<button class="btn reset">Reset example</button>':''}<span class="hint">${esc(cfg.slow||'')}</span></div>
+      <div class="extra"></div></div>
+    <div class="resp"></div></div>`;
+  const form=$('.form',el), jt=$('.json',el), jm=$('.jm',el), resp=respPanel($('.resp',el));
+  if(jt) tabKeys(jt);
+  const ctx = {el, form, resp, extra:$('.extra',el)};
+  const fillJson = () => { if(jt) try{ jt.value = JSON.stringify(cfg.form ? cfg.getBody(ctx) : cfg.sample, null, 2); }catch{} };
+  if(cfg.form){ form.innerHTML = cfg.form; cfg.init?.(ctx); } fillJson();
+  if(jm) jm.onchange=()=>{ if(jm.checked) fillJson(); form.hidden=jm.checked; $('.jwrap',el).hidden=!jm.checked; };
+  $('.reset',el)?.addEventListener('click',()=>{ if(cfg.form){ form.innerHTML=cfg.form; cfg.init?.(ctx); } if(jt) jt.value=JSON.stringify(cfg.sample ?? cfg.getBody(ctx),null,2); });
+  const send=$('.send',el);
+  ctx.send = async () => {
+    let body;
+    if(cfg.method!=='GET'){
+      try{ body = (cfg.form && !jm.checked) ? cfg.getBody(ctx) : JSON.parse(jt.value); }
+      catch(e){ resp.show({ok:false,status:'JSON',ms:0,data:{detail:'Invalid JSON: '+e.message}}); return; }
+    }
+    send.disabled=true; resp.loading(cfg.slow);
+    const res = await call(cfg.method, (cfg.url||BASE+cfg.path), body);
+    send.disabled=false;
+    cfg.after?.(res, body, ctx);
+    resp.show(res, (d,host)=>cfg.render ? cfg.render(d,host,ctx,body) : null);
+  };
+  send.onclick = ctx.send;
+  ctx.setForm = vals => { if(jm && jm.checked){ jm.checked=false; jm.onchange(); } cfg.setForm?.(ctx, vals); fillJson(); };
+  cfg.ctx = ctx;
+  return el;
+}
+
+function go(id, vals){
+  $$('.page').forEach(p=>p.classList.toggle('active', p.id==='p-'+id));
+  $$('nav button').forEach(b=>b.classList.toggle('active', b.dataset.id===id));
+  const cfg = PAGES.find(p=>p.id===id);
+  if(vals) cfg.ctx.setForm(vals);
+  history.replaceState(null,'','#'+id); window.scrollTo(0,0);
+}
+
+// ---------------------------------------------------------------- renderers
+function renderPrereqs(d){
+  state.prereqs = d;
+  return (d.skills||[]).map((s,si)=>{
+    const items = s.prerequisites||[];
+    return `<div class="item"><div class="t" style="font-size:15px">${esc(s.skill)} <span class="badge">${items.length} prerequisites</span>
+      <button class="btn small" style="margin-left:auto" onclick="go('roadmap',{missing:state.prereqs.skills[${si}].prerequisites.map(p=>p.name),target:state.prereqs.skills[${si}].skill})">Roadmap: prerequisites + ${esc(s.skill)} →</button></div>
+      ${(s.warnings||[]).length?`<div class="box warn"><b>Warnings (needs a human check):</b><ul style="margin:4px 0 0;padding-left:18px">${s.warnings.map(w=>`<li>${esc(w)}</li>`).join('')}</ul></div>`:''}
+      <div class="tbl"><table><tr><th>#</th><th>Prerequisite</th><th>Level</th><th>Depends on</th><th>Topics</th><th></th></tr>
+      ${items.map((p,i)=>`<tr><td class="muted">${i+1}</td><td><b>${esc(p.name)}</b></td><td>${levelBadge(p.level)}</td>
+        <td>${p.depends_on?.length? `<div class="chips">${p.depends_on.map(x=>`<span class="chip">${esc(x)}</span>`).join('')}</div>` : '<span class="badge ok">foundation</span>'}</td>
+        <td><div class="chips">${(p.topics||[]).map(x=>`<span class="chip">${esc(x)}</span>`).join('')}</div></td>
+        <td><button class="btn small" onclick="go('generate',{skill:state.prereqs.skills[${si}].prerequisites[${i}].name,topics:state.prereqs.skills[${si}].prerequisites[${i}].topics})">Make test</button></td></tr>`).join('')}
+      </table></div></div>`;
+  }).join('') || '<div class="empty">No skills returned.</div>';
+}
+
+function renderProfile(d){
+  return `${d.summary?`<div class="box acc"><b>Summary:</b> ${esc(d.summary)}</div>`:''}
+  <div class="tbl"><table><tr><th>Skill</th><th>Level</th><th style="width:140px">Confidence</th><th>Evidence</th></tr>
+  ${(d.skills||[]).map(s=>`<tr><td><b>${esc(s.name)}</b></td><td>${levelBadge(s.level)}</td>
+    <td><div class="bar"><i style="width:${Math.max(0,Math.min(100,+s.confidence||0))}%"></i></div><span class="hint">${esc(s.confidence)}%</span></td>
+    <td class="muted">${esc(s.evidence)}</td></tr>`).join('')}</table></div>`;
+}
+
+function renderRoadmap(d){
+  const steps=d.steps||[]; const total=d.total_weeks ?? steps.reduce((a,s)=>a+(+s.weeks||0),0);
+  const nTopics=steps.reduce((a,s)=>a+(s.topics||[]).length,0);
+  const nSub=steps.reduce((a,s)=>a+(s.topics||[]).reduce((b,t)=>b+(t.subtopics||[]).length,0),0);
+  let week=1;
+  return `<div class="box acc"><b>${steps.length}</b> steps${d.target_skill?` to <b>${esc(d.target_skill)}</b>`:''} · <b>${nTopics}</b> topics · <b>${nSub}</b> subtopics · about <b>${total}</b> weeks</div><div class="timeline">
+  ${steps.map((s,i)=>{ const from=week, to=week+(+s.weeks||1)-1; week=to+1; return `<div class="item"><div class="t">${i+1}. ${esc(s.skill)}
+      <span class="badge ${s.role==='target'?'ok':''}">${s.role==='target'?'target skill':'prerequisite'}</span>
+      <span class="badge acc">${esc(s.weeks)} week${s.weeks==1?'':'s'}</span><span class="hint">week ${from}${to>from?'–'+to:''}</span></div>
+    ${s.summary?`<div class="muted" style="margin-top:6px">${esc(s.summary)}</div>`:''}
+    ${s.why_learn||(s.used_in||[]).length?`<div class="box acc" style="margin-top:8px"><b>${s.role==='target'?`Why learn ${esc(s.skill)}?`:'Why learn this before the target skill?'}</b>
+      ${s.why_learn?`<div style="margin-top:4px">${esc(s.why_learn)}</div>`:''}
+      ${(s.used_in||[]).length?`<div class="hint" style="margin-top:6px">Where you will use it</div><ul style="margin:2px 0 0;padding-left:18px">${s.used_in.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>`:''}</div>`:''}
+    ${(s.warnings||[]).length?`<div class="box warn">${s.warnings.map(esc).join('<br>')}</div>`:''}
+    ${(s.topics||[]).map((t,j)=>`<details style="margin-top:8px" ${i===0&&j===0?'open':''}><summary style="cursor:pointer;font-weight:600">${i+1}.${j+1} ${esc(typeof t==='string'?t:t.name)} <span class="hint">${(t.subtopics||[]).length} subtopics</span>${t.why?`<div class="hint" style="font-weight:400;margin-top:2px"><b>Used for:</b> ${esc(t.why)}</div>`:''}</summary>
+      <ul style="margin:4px 0 0;padding-left:22px">${(t.subtopics||[]).map(x=>`<li>${esc(x)}</li>`).join('')}</ul>
+      ${(t.practice||[]).length?`<div style="margin:4px 0 0 4px"><span class="hint">Practice</span><ul style="margin:2px 0 0;padding-left:22px">${t.practice.map(x=>`<li>${esc(x)}</li>`).join('')}</ul></div>`:''}</details>`).join('')}
+    ${s.project?`<div class="box ok" style="margin-top:8px"><b>Step project:</b> ${esc(s.project)}</div>`:''}
+    <div style="margin-top:6px"><span class="hint">Resources</span><ul style="margin:2px 0 0;padding-left:18px">${(s.resources||[]).map(x=>`<li>${esc(x)}</li>`).join('')}</ul></div></div>`;}).join('')}</div>`;
+}
+
+function renderSimpleMcq(d){
+  return (d.questions||[]).map((q,i)=>`<div class="item"><div class="q-head"><b>Q${i+1}.</b> ${diffBadge(q.difficulty)} <span class="chip">${esc(q.topic)}</span></div>
+    <div>${esc(q.question)}</div>${(q.options||[]).map((o,j)=>`<div class="opt ${j===q.answer_index?'correct':''}" style="cursor:default">${String.fromCharCode(65+j)}. ${esc(o)} ${j===q.answer_index?'<span class="badge ok" style="margin-left:auto">answer</span>':''}</div>`).join('')}</div>`).join('') || '<div class="empty">No questions.</div>';
+}
+
+function renderMatch(d){
+  return `<div class="box ok"><b>Strengths</b><ul style="margin:4px 0 0;padding-left:18px">${(d.strengths||[]).map(x=>`<li>${esc(x)}</li>`).join('')||'<li>none</li>'}</ul></div>
+  <div class="box bad"><b>Gaps</b><ul style="margin:4px 0 0;padding-left:18px">${(d.gaps||[]).map(x=>`<li>${esc(x)}</li>`).join('')||'<li>none</li>'}</ul></div>
+  <div class="box acc"><b>Recommendation:</b> ${esc(d.recommendation)}</div>`;
+}
+
+function runResult(r){
+  const ok = r.status_id===3;
+  return `<div class="q-head"><span class="badge ${ok?'ok':r.status_id===5?'warn':'bad'}">${esc(r.status)} (${esc(r.status_id)})</span>
+    <span class="hint">time ${esc(r.time ?? '–')}s · memory ${esc(r.memory ?? '–')} KB</span></div>
+    <span class="hint">stdout</span><div class="out">${esc(r.stdout)||'<span class="muted">(empty)</span>'}</div>
+    ${r.stderr?`<span class="hint">stderr</span><div class="out err">${esc(r.stderr)}</div>`:''}
+    ${r.compile_output?`<span class="hint">compile output</span><div class="out err">${esc(r.compile_output)}</div>`:''}`;
+}
+
+function renderGradeText(d, noSummary){
+  const pct = d.max ? Math.round(100*d.score/d.max) : 0;
+  return (noSummary ? '' : `<div class="summary"><div><div class="score-big">${esc(d.score)} <span class="muted" style="font-size:18px">/ ${esc(d.max)}</span></div><div class="hint">${pct}%</div></div>
+    ${d.needs_review?'<span class="badge warn">needs review</span>':'<span class="badge ok">auto-graded</span>'}</div>`) + `
+    ${d.feedback?`<div class="box acc"><b>Feedback:</b> ${esc(d.feedback)}</div>`:''}
+    ${(d.covered||[]).map(x=>`<div class="box ok">✓ ${esc(x)}</div>`).join('')}
+    ${(d.missing||[]).map(x=>`<div class="box bad">✗ ${esc(x)}</div>`).join('')}
+    ${(d.wrong_statements||[]).length?`<div class="box warn"><b>Wrong statements</b><ul style="margin:4px 0 0;padding-left:18px">${d.wrong_statements.map(x=>`<li>${esc(x)}</li>`).join('')}</ul></div>`:''}`;
+}
+
+function renderGrade(d, paper, answers){
+  const byId = Object.fromEntries((paper||[]).map(q=>[q.id,q]));
+  return `<div class="card" style="margin-bottom:12px"><div class="summary">
+      <div><div class="score-big">${esc(d.score)} <span class="muted" style="font-size:18px">/ ${esc(d.total)}</span></div><div class="hint">${esc(d.percent)}%</div></div>
+      <span class="badge ${d.passed?'ok':'bad'}" style="font-size:14px;padding:4px 14px">${d.passed?'PASSED':'NOT PASSED'}</span>
+      ${(d.needs_review||[]).length?`<span class="badge warn">needs review: ${d.needs_review.map(esc).join(', ')}</span>`:''}</div>
+      <div class="bar" style="margin-top:10px"><i style="width:${Math.min(100,+d.percent||0)}%;background:${d.passed?'var(--ok)':'var(--bad)'}"></i></div></div>
+    ${(d.results||[]).map(r=>{
+      const q = byId[r.id]; const a = answers?.[r.id];
+      let body='';
+      if(r.type==='mcq' || r.type==='multi_select'){
+        if(q){ const chosen = r.type==='mcq' ? [a] : (a||[]); const key = r.type==='mcq' ? [q.key?.answer_index] : (q.key?.answer_indexes||[]);
+          body += `<div>${esc(q.text)}</div>` + (q.options||[]).map((o,j)=>{
+            const isKey=key.includes(j), isPick=chosen.includes(j);
+            return `<div class="opt ${isKey?'correct':isPick?'wrong':''}" style="cursor:default">${String.fromCharCode(65+j)}. ${esc(o)}
+              <span style="margin-left:auto" class="chips">${isPick?'<span class="badge acc">your pick</span>':''}${isKey?'<span class="badge ok">correct</span>':''}</span></div>`; }).join(''); }
+        if(r.explanation) body += `<div class="box acc"><b>Why:</b> ${esc(r.explanation)}</div>`;
+      } else if(r.type==='short_answer'){
+        if(q) body += `<div>${esc(q.text)}</div>`;
+        if(typeof a==='string') body += `<span class="hint">Your answer</span><div class="out" style="white-space:pre-wrap">${esc(a)}</div>`;
+        body += renderGradeText(r, true);
+        if(q?.key?.model_answer) body += `<details><summary class="hint">Model answer</summary><div class="box acc">${esc(q.key.model_answer)}</div></details>`;
+      } else if(r.type==='coding'){
+        if(q) body += `<div><b>${esc(q.title||'')}</b> ${esc(q.text)}</div>`;
+        body += `<div class="hint" style="margin:6px 0">${esc(r.detail||'')}</div>`;
+        if(r.tests?.length) body += `<div class="tbl"><table><tr><th>Test</th><th>Result</th><th>Status</th><th>Time</th><th>Details</th></tr>${r.tests.map(t=>`<tr>
+          <td>${esc(t.test)}</td><td>${t.passed?'<span class="badge ok">pass</span>':'<span class="badge bad">fail</span>'}</td><td>${esc(t.status)}</td><td>${esc(t.time)}</td>
+          <td>${t.expected!==undefined?`<div class="hint">expected</div><div class="out">${esc(t.expected)}</div><div class="hint">your output</div><div class="out">${esc(t.your_output)||'(empty)'}</div>${t.error?`<div class="out err">${esc(t.error)}</div>`:''}`:(t.test.startsWith('hidden')?'<span class="hint">hidden</span>':'')}</td></tr>`).join('')}</table></div>`;
+      } else body += `<div class="muted">${esc(r.detail||'')}</div>`;
+      const full = r.score>=r.max, zero = !r.score;
+      return `<div class="item"><div class="q-head"><b>${esc(r.id)}</b> <span class="badge">${esc(r.type)}</span>
+        <span class="badge ${full?'ok':zero?'bad':'warn'}">${esc(r.score)} / ${esc(r.max)}</span>${r.needs_review?'<span class="badge warn">needs review</span>':''}</div>${body}</div>`;
+    }).join('')}`;
+}
+
+// ---- generated paper: answer key view + interactive test
+function renderPaper(d, host){
+  state.paper = d;
+  host.innerHTML = `<div class="summary" style="margin-bottom:10px"><div><b>${esc(d.skill)}</b> <span class="hint">paper ${esc(d.paper_id)}</span></div>
+      <span class="badge acc">${(d.questions||[]).length} questions</span><span class="badge">${esc(d.total_marks)} marks</span></div>
+    ${(d.warnings||[]).map(w=>`<div class="box warn">${esc(w)}</div>`).join('')}
+    <div class="tabs" style="margin:0 0 12px;display:inline-flex"><button class="on" data-m="take">Take the test (student view)</button><button data-m="key">Answer key (full paper)</button></div>
+    <div class="mode"></div>`;
+  const mode=$('.mode',host);
+  const show = m => { $$('.tabs button[data-m]',host).forEach(b=>b.classList.toggle('on',b.dataset.m===m)); m==='take' ? renderTake(d, mode) : (mode.innerHTML = renderKey(d)); };
+  $$('.tabs button[data-m]',host).forEach(b=>b.onclick=()=>show(b.dataset.m));
+  show('take');
+}
+
+function renderKey(d){
+  return (d.questions||[]).map(q=>{
+    let b=`<div style="white-space:pre-wrap">${esc(q.text)}</div>`;
+    if(q.type==='mcq'||q.type==='multi_select'){
+      const key = q.type==='mcq' ? [q.key?.answer_index] : (q.key?.answer_indexes||[]);
+      b += (q.options||[]).map((o,j)=>`<div class="opt ${key.includes(j)?'correct':''}" style="cursor:default">${String.fromCharCode(65+j)}. ${esc(o)}</div>`).join('');
+      if(q.key?.explanation) b+=`<div class="box acc"><b>Why:</b> ${esc(q.key.explanation)}</div>`;
+    } else if(q.type==='short_answer'){
+      b += `<div class="hint" style="margin-top:6px">Key points</div>` + (q.key?.key_points||[]).map(p=>`<div class="box ok">${esc(p.point)} <span class="badge">weight ${esc(p.weight)}</span></div>`).join('');
+      if(q.key?.model_answer) b+=`<div class="hint">Model answer</div><div class="box acc">${esc(q.key.model_answer)}</div>`;
+    } else if(q.type==='coding'){
+      b = `<div><b>${esc(q.title||'')}</b></div>` + b + codingMeta(q);
+      const tests=[...(q.samples||[]).map(t=>({...t,k:'sample'})),...(q.hidden||[]).map(t=>({...t,k:'hidden'}))];
+      b += `<div class="tbl"><table><tr><th>Kind</th><th>Input</th><th>Expected</th></tr>${tests.map(t=>`<tr><td>${t.k}</td><td><div class="out">${esc(t.input)}</div></td><td><div class="out">${esc(t.expected)}</div></td></tr>`).join('')}</table></div>`;
+    }
+    return `<div class="item"><div class="q-head"><b>${esc(q.id)}</b> <span class="badge">${esc(q.type)}</span> <span class="badge acc">${esc(q.marks)} marks</span> ${diffBadge(q.difficulty)} ${q.topic?`<span class="chip">${esc(q.topic)}</span>`:''}</div>${b}</div>`;
+  }).join('');
+}
+function codingMeta(q){
+  return `<div class="tbl" style="margin:6px 0"><table>
+    ${q.input_format?`<tr><th style="width:130px">Input format</th><td>${esc(q.input_format)}</td></tr>`:''}
+    ${q.output_format?`<tr><th>Output format</th><td>${esc(q.output_format)}</td></tr>`:''}
+    ${q.constraints?`<tr><th>Constraints</th><td>${esc(q.constraints)}</td></tr>`:''}</table></div>`;
+}
+
+function renderTake(d, host){
+  const sp = d.student_paper || d.questions;
+  host.innerHTML = sp.map(q=>{
+    let b = `<div style="white-space:pre-wrap;margin-bottom:6px">${esc(q.text)}</div>`;
+    if(q.type==='mcq') b += q.options.map((o,j)=>`<label class="opt" style="font-weight:400;color:var(--text);margin:5px 0"><input type="radio" name="a-${q.id}" value="${j}"> ${String.fromCharCode(65+j)}. ${esc(o)}</label>`).join('');
+    else if(q.type==='multi_select') b += `<div class="hint">Select all that apply</div>` + q.options.map((o,j)=>`<label class="opt" style="font-weight:400;color:var(--text);margin:5px 0"><input type="checkbox" name="a-${q.id}" value="${j}"> ${String.fromCharCode(65+j)}. ${esc(o)}</label>`).join('');
+    else if(q.type==='short_answer') b += `<textarea data-a="${q.id}" rows="5" placeholder="Write 2-5 sentences…"></textarea>`;
+    else if(q.type==='coding'){
+      b = `<div><b>${esc(q.title||'')}</b></div>` + b + codingMeta(q) +
+        (q.samples||[]).map((s,i)=>`<div class="row" style="gap:8px"><div><span class="hint">Sample ${i+1} input</span><div class="out">${esc(s.input)}</div></div><div><span class="hint">Expected output</span><div class="out">${esc(s.expected)}</div></div></div>`).join('') +
+        (q.notes?`<div class="hint">${esc(q.notes)}</div>`:'') +
+        `<div class="row" style="margin-top:8px"><div style="flex:0 0 160px"><label>Language</label><select data-lang="${q.id}">${(q.languages||LANGS).map(l=>`<option>${l}</option>`).join('')}</select></div></div>
+        <label>Your code</label><textarea class="code" data-a="${q.id}" spellcheck="false">${esc(STARTERS.python)}</textarea>
+        <div class="actions" style="margin-top:8px"><button class="btn small" data-runs="${q.id}">▶ Run all samples</button>
+        <button class="btn small" data-runc="${q.id}">▶ Run with custom input</button></div>
+        <textarea data-stdin="${q.id}" rows="2" placeholder="Custom input (stdin)" style="margin-top:6px;font-family:var(--mono)"></textarea>
+        <div data-out="${q.id}"></div>`;
+    }
+    return `<div class="item"><div class="q-head"><b>${esc(q.id)}</b> <span class="badge">${esc(q.type.replace('_',' '))}</span> <span class="badge acc">${esc(q.marks)} marks</span> ${diffBadge(q.difficulty)}</div>${b}</div>`;
+  }).join('') + `<div class="sticky-submit"><div class="actions" style="margin:0"><button class="btn primary" id="submitTest">Submit & grade</button>
+    <label class="toggle">Pass % <input type="number" id="passPct" value="60" min="0" max="100" style="width:70px"></label>
+    <span class="hint">Calls POST /assessment/grade with the full paper (keys) + your answers.</span></div></div><div id="gradeOut"></div>`;
+
+  $$('textarea.code',host).forEach(tabKeys);
+  $$('select[data-lang]',host).forEach(s=>s.onchange=()=>{ const ta=$(`textarea.code[data-a="${s.dataset.lang}"]`,host);
+    if(Object.values(STARTERS).includes(ta.value) || !ta.value.trim()) ta.value=STARTERS[s.value]; });
+  const runFor = async (id, inputs) => {
+    const q = sp.find(x=>x.id===id), out=$(`[data-out="${id}"]`,host);
+    const lang=$(`select[data-lang="${id}"]`,host).value, code=$(`textarea.code[data-a="${id}"]`,host).value;
+    out.innerHTML=`<div class="hint"><span class="spin"></span> running…</div>`;
+    const parts=[];
+    for(const inp of inputs){
+      const r = await call('POST', BASE+'/assessment/run-code', {language:lang, source_code:code, stdin:inp.input});
+      if(!r.ok){ parts.push(renderError(r)); break; }
+      let verdict='';
+      if(inp.expected!==undefined){ const pass = r.data.status_id===3 && normalize(r.data.stdout)===normalize(inp.expected);
+        verdict = `<span class="badge ${pass?'ok':'bad'}">${pass?'matches expected':'does not match expected'}</span>`; }
+      parts.push(`<div class="item"><div class="q-head"><b>${esc(inp.label)}</b> ${verdict}</div>${runResult(r.data)}${inp.expected!==undefined && normalize(r.data.stdout)!==normalize(inp.expected)?`<span class="hint">expected</span><div class="out">${esc(inp.expected)}</div>`:''}</div>`);
+      out.innerHTML = parts.join('');
+    }
+    out.innerHTML = parts.join('');
+  };
+  $$('[data-runs]',host).forEach(b=>b.onclick=()=>{ const q=sp.find(x=>x.id===b.dataset.runs);
+    runFor(q.id,(q.samples||[]).map((s,i)=>({label:'Sample '+(i+1),input:s.input,expected:s.expected}))); });
+  $$('[data-runc]',host).forEach(b=>b.onclick=()=>runFor(b.dataset.runc,[{label:'Custom input',input:$(`[data-stdin="${b.dataset.runc}"]`,host).value}]));
+
+  $('#submitTest',host).onclick = async () => {
+    const answers={};
+    for(const q of sp){
+      if(q.type==='mcq'){ const c=$(`input[name="a-${q.id}"]:checked`,host); if(c) answers[q.id]=+c.value; }
+      else if(q.type==='multi_select'){ answers[q.id]=$$(`input[name="a-${q.id}"]:checked`,host).map(x=>+x.value); }
+      else if(q.type==='short_answer'){ answers[q.id]=$(`textarea[data-a="${q.id}"]`,host).value; }
+      else if(q.type==='coding'){ answers[q.id]={language:$(`select[data-lang="${q.id}"]`,host).value, source_code:$(`textarea.code[data-a="${q.id}"]`,host).value}; }
+    }
+    const body={paper:d.questions, answers, pass_percent:+$('#passPct',host).value||60};
+    const out=$('#gradeOut',host), btn=$('#submitTest',host);
+    btn.disabled=true; out.innerHTML=`<div class="empty"><span class="spin"></span> Grading… written answers use the AI, coding runs in Judge0 (can take a minute).</div>`;
+    const r = await call('POST', BASE+'/assessment/grade', body);
+    btn.disabled=false;
+    out.innerHTML = `<h3 style="margin:18px 0 10px">Result</h3>` + (r.ok ? renderGrade(r.data, d.questions, answers) : renderError(r)) +
+      `<details style="margin-top:10px"><summary class="hint">Raw grade response</summary><pre class="raw">${esc(JSON.stringify(r.data,null,2))}</pre></details>`;
+    out.scrollIntoView({behavior:'smooth'});
+  };
+}
+
+// ---------------------------------------------------------------- pages
+const GRADE_SAMPLE = {
+  paper:[
+    {id:"q1",type:"mcq",marks:1,text:"Which keyword is used to inherit a class in Java?",options:["implements","extends","inherits","super"],key:{answer_index:1,explanation:"A class inherits another class with extends."}},
+    {id:"q2",type:"coding",marks:10,text:"Read an integer n and print n * 2.",samples:[{input:"21\n",expected:"42"}],hidden:[{input:"0\n",expected:"0"},{input:"-4\n",expected:"-8"}]}
+  ],
+  answers:{q1:1,q2:{language:"python",source_code:"n = int(input())\nprint(n * 2)"}},
+  pass_percent:60
+};
+const PROFILE_SAMPLE = {
+  github:{repos:[{name:"college-portal",languages:{Java:82000,HTML:9000},contributors:2,my_commit_share:0.7,dependencies:["spring-boot-starter-web","mysql-connector"]}]},
+  leetcode:{solved:{easy:60,medium:35,hard:4},topics:{Array:40,"Dynamic Programming":8,Graph:5}},
+  hackerrank:{badges:{Java:4,"Problem Solving":3}}
+};
+
+page({group:'Status', id:'health', title:'Health check', method:'GET', path:'/health',
+  desc:'Checks the analyzer service is up. It does not check the AI model or Judge0.',
+  render:d=>`<div class="box ${d.ok?'ok':'bad'}" style="font-size:16px">${d.ok?'✓ Analyzer is up':'Analyzer reported not ok'}</div>`});
+
+page({group:'Agents', id:'prereqs', title:'Prerequisite tree', method:'POST', path:'/agents/prereqs',
+  desc:'Company skills → the foundations a student must know for each, as a dependency tree. From the result you can jump straight to a roadmap or to a test for any prerequisite.',
+  slow:'15–60 s per skill', sample:{skills:["Spring Boot","React"]},
+  form:`<label>Skills (comma or one per line)</label><textarea class="f-skills" rows="3">Spring Boot, React</textarea>`,
+  getBody:c=>({skills:list($('.f-skills',c.form).value)}),
+  render:renderPrereqs});
+
+page({group:'Agents', id:'profile', title:'Profile analysis', method:'POST', path:'/agents/profile',
+  desc:'GitHub / LeetCode / HackerRank data → skills that data supports, with confidence and evidence. Edit each source as JSON; leave a box empty to skip it.',
+  slow:'10–40 s', sample:PROFILE_SAMPLE,
+  form:`<label>github</label><textarea class="json f-gh" style="min-height:140px" spellcheck="false"></textarea>
+        <label>leetcode</label><textarea class="json f-lc" style="min-height:90px" spellcheck="false"></textarea>
+        <label>hackerrank</label><textarea class="json f-hr" style="min-height:60px" spellcheck="false"></textarea>`,
+  init:c=>{ $('.f-gh',c.form).value=JSON.stringify(PROFILE_SAMPLE.github,null,2); $('.f-lc',c.form).value=JSON.stringify(PROFILE_SAMPLE.leetcode,null,2); $('.f-hr',c.form).value=JSON.stringify(PROFILE_SAMPLE.hackerrank,null,2); $$('textarea',c.form).forEach(tabKeys); },
+  getBody:c=>{ const p=(cls)=>{ const v=$(cls,c.form).value.trim(); if(!v) return null; try{return JSON.parse(v)}catch(e){ throw new Error(cls.slice(3)+' is not valid JSON: '+e.message) } };
+    return {github:p('.f-gh'),leetcode:p('.f-lc'),hackerrank:p('.f-hr')}; },
+  render:renderProfile});
+
+page({group:'Agents', id:'roadmap', title:'Learning roadmap', method:'POST', path:'/agents/roadmap',
+  desc:'Prerequisites (in order) + the target skill → a full syllabus for every step: topics, subtopics, practice tasks, a project and resources. The target skill is always the last step.',
+  slow:'30–120 s (one model call per step, run in parallel)', sample:{missing_skills:["Linux basics","Computer networking","Virtualization"],target_skill:"Cloud Computing"},
+  form:`<label>Target skill (the skill you want to learn)</label><input type="text" class="f-target" value="Cloud Computing">
+        <label>Prerequisites, in order (one per line)</label><textarea class="f-ms" rows="6">Linux basics
+Computer networking
+Virtualization</textarea>`,
+  getBody:c=>({missing_skills:list($('.f-ms',c.form).value),target_skill:$('.f-target',c.form).value.trim()||null}),
+  setForm:(c,v)=>{ $('.f-ms',c.form).value=v.missing.join('\n'); $('.f-target',c.form).value=v.target||''; },
+  render:renderRoadmap});
+
+page({group:'Agents', id:'simplemcq', title:'Simple MCQ (older)', method:'POST', path:'/agents/assessment',
+  desc:'MCQ-only questions. Kept for compatibility. Use <b>Generate paper</b> for real tests.',
+  slow:'10–40 s', sample:{skill:"Core Java",topics:["classes","inheritance"],count:5},
+  form:`<label>Skill</label><input type="text" class="f-skill" value="Core Java">
+        <label>Topics (comma)</label><input type="text" class="f-topics" value="classes, inheritance">
+        <label>Count</label><input type="number" class="f-count" value="5" min="1" max="20">`,
+  getBody:c=>({skill:$('.f-skill',c.form).value.trim(),topics:list($('.f-topics',c.form).value),count:+$('.f-count',c.form).value||5}),
+  render:renderSimpleMcq});
+
+page({group:'Agents', id:'match', title:'Match explanation', method:'POST', path:'/agents/match',
+  desc:'Explains why a student fits a company. The score is calculated here in the page (verified required skills ÷ required skills); the model only explains it.',
+  slow:'10–30 s',
+  form:`<div class="row"><div><label>Student name</label><input type="text" class="f-sn" value="Asha"></div><div><label>Company name</label><input type="text" class="f-cn" value="Cognizant"></div></div>
+        <label>Student verified skills (comma)</label><input type="text" class="f-sv" value="Core Java, OOP concepts">
+        <label>Company required skills (comma)</label><input type="text" class="f-cr" value="Core Java, OOP concepts, Spring Core">
+        <label>Match score (auto)</label><input type="number" class="f-ms" value="67">`,
+  init:c=>{ const upd=()=>{ const v=new Set(list($('.f-sv',c.form).value).map(s=>s.toLowerCase())), r=list($('.f-cr',c.form).value);
+      $('.f-ms',c.form).value = r.length? Math.round(100*r.filter(s=>v.has(s.toLowerCase())).length/r.length) : 0; };
+    $('.f-sv',c.form).oninput=upd; $('.f-cr',c.form).oninput=upd; upd(); },
+  getBody:c=>({student:{name:$('.f-sn',c.form).value,verified_skills:list($('.f-sv',c.form).value)},
+    company:{name:$('.f-cn',c.form).value,required_skills:list($('.f-cr',c.form).value)}, match_score:+$('.f-ms',c.form).value}),
+  render:renderMatch});
+
+page({group:'Assessment', id:'generate', title:'Generate paper & take test', method:'POST', path:'/assessment/generate',
+  desc:'Builds a mixed paper (MCQ, multi-select, written, coding). Then take it as a student right here: run your code against samples, submit, and see the graded result.',
+  slow:'30–90 s with a coding question',
+  form:`<label>Skill</label><input type="text" class="f-skill" value="Core Java">
+        <label>Topics (comma)</label><input type="text" class="f-topics" value="classes, inheritance, collections">
+        <label>Difficulty</label><select class="f-diff"><option>mixed</option><option>easy</option><option>medium</option><option>hard</option></select>
+        <label>How many of each type</label>
+        <div class="row"><div><span class="hint">mcq (≤10)</span><input type="number" class="f-mcq" value="3" min="0" max="10"></div>
+          <div><span class="hint">multi_select (≤6)</span><input type="number" class="f-ms" value="1" min="0" max="6"></div>
+          <div><span class="hint">short_answer (≤6)</span><input type="number" class="f-sa" value="1" min="0" max="6"></div>
+          <div><span class="hint">coding (≤3)</span><input type="number" class="f-cd" value="1" min="0" max="3"></div></div>`,
+  getBody:c=>({skill:$('.f-skill',c.form).value.trim(),topics:list($('.f-topics',c.form).value),difficulty:$('.f-diff',c.form).value,
+    counts:{mcq:+$('.f-mcq',c.form).value||0,multi_select:+$('.f-ms',c.form).value||0,short_answer:+$('.f-sa',c.form).value||0,coding:+$('.f-cd',c.form).value||0}}),
+  setForm:(c,v)=>{ $('.f-skill',c.form).value=v.skill; $('.f-topics',c.form).value=(v.topics||[]).join(', '); },
+  render:(d,host)=>{ renderPaper(d,host); }});
+
+page({group:'Assessment', id:'runcode', title:'Run code', method:'POST', path:'/assessment/run-code',
+  desc:'The student’s “Run” button: runs a program once with your input via Judge0. Nothing is graded. In Java, name the class <code>Main</code>.',
+  form:`<div class="row"><div style="flex:0 0 180px"><label>Language</label><select class="f-lang">${LANGS.map(l=>`<option>${l}</option>`).join('')}</select></div></div>
+        <label>Source code</label><textarea class="code f-code" spellcheck="false"></textarea>
+        <label>stdin</label><textarea class="f-stdin" rows="3" style="font-family:var(--mono)">21</textarea>`,
+  init:c=>{ const ta=$('.f-code',c.form); ta.value=TEMPLATES.python; tabKeys(ta);
+    $('.f-lang',c.form).onchange=e=>{ if(Object.values(TEMPLATES).includes(ta.value)||!ta.value.trim()) ta.value=TEMPLATES[e.target.value]; };
+    ta.addEventListener('keydown',e=>{ if(e.key==='Enter'&&(e.ctrlKey||e.metaKey)){ e.preventDefault(); c.send(); } }); },
+  getBody:c=>({language:$('.f-lang',c.form).value,source_code:$('.f-code',c.form).value,stdin:$('.f-stdin',c.form).value}),
+  render:runResult});
+
+page({group:'Assessment', id:'grade', title:'Grade a submission', method:'POST', path:'/assessment/grade',
+  desc:'Grades a whole submission: <code>paper</code> is the full <code>questions</code> list (with keys) and <code>answers</code> maps question id → answer. The sample below runs without the AI (only Judge0).',
+  slow:'Written answers use the AI; coding uses Judge0', sample:GRADE_SAMPLE,
+  render:(d,host,ctx,body)=>renderGrade(d, body?.paper, body?.answers)});
+
+page({group:'Assessment', id:'gradetext', title:'Grade one written answer', method:'POST', path:'/assessment/grade-text',
+  desc:'The AI ticks key points (with a quote from the answer as proof); the score is calculated in code. Answers under 10 characters score 0 without calling the AI.',
+  slow:'5–30 s',
+  form:`<label>Question</label><textarea class="f-q" rows="2">What is the difference between an interface and an abstract class in Java?</textarea>
+        <label>Key points (text + weight 1–3)</label><div class="f-kps"></div><button class="btn small f-add" type="button">+ Add key point</button>
+        <label>Student answer</label><textarea class="f-a" rows="5">A class can implement multiple interfaces but it can extend only one abstract class. Abstract classes can also have fields and constructors.</textarea>
+        <label>Max marks</label><input type="number" class="f-mm" value="4" min="1" style="max-width:120px">`,
+  init:c=>{ const host=$('.f-kps',c.form);
+    const add=(p='',w=2)=>{ const r=document.createElement('div'); r.className='kp';
+      r.innerHTML=`<input type="text" value="${esc(p)}" placeholder="Key point"><input type="number" value="${w}" min="1" max="3"><button class="btn small" type="button" title="Remove">✕</button>`;
+      $('button',r).onclick=()=>r.remove(); host.appendChild(r); };
+    add('A class can implement many interfaces but extend only one abstract class',2);
+    add('Abstract classes can hold fields and constructors; interfaces mainly declare behaviour',2);
+    $('.f-add',c.form).onclick=()=>add(); },
+  getBody:c=>({question:$('.f-q',c.form).value, key_points:$$('.kp',c.form).map(r=>({point:$('input[type=text]',r).value.trim(),weight:+$('input[type=number]',r).value||1})).filter(k=>k.point),
+    answer:$('.f-a',c.form).value, max_marks:+$('.f-mm',c.form).value||4}),
+  render:renderGradeText});
+
+page({group:'Judge0 (direct)', id:'judge0', title:'Judge0 submission', method:'POST', url:JUDGE0+'/submissions?base64_encoded=false&wait=true',
+  desc:'Calls Judge0 directly on <code>localhost:2358</code> to check the code runner works. If this fails with “no connection” while <b>Run code</b> works, Judge0 is blocking cross-origin browser calls; that is fine, the analyzer reaches it inside Docker.',
+  sample:{source_code:"n = int(input())\nprint(n * 2)",language_id:71,stdin:"21\n"},
+  form:`<div class="row"><div style="flex:0 0 260px"><label>language_id</label><select class="f-lid">
+          <option value="71">71 – Python 3.8</option><option value="62">62 – Java (OpenJDK 13)</option><option value="54">54 – C++ (GCC 9.2)</option><option value="50">50 – C (GCC 9.2)</option><option value="63">63 – JavaScript (Node 12)</option></select></div></div>
+        <label>source_code</label><textarea class="code f-code" spellcheck="false"></textarea>
+        <label>stdin</label><textarea class="f-stdin" rows="2" style="font-family:var(--mono)">21</textarea>
+        <label>expected_output (optional, makes Judge0 return Wrong Answer on mismatch)</label><input type="text" class="f-exp">`,
+  init:c=>{ const ta=$('.f-code',c.form); ta.value=TEMPLATES.python; tabKeys(ta);
+    const map={71:'python',62:'java',54:'cpp',50:'c',63:'javascript'};
+    $('.f-lid',c.form).onchange=e=>{ if(Object.values(TEMPLATES).includes(ta.value)||!ta.value.trim()) ta.value=TEMPLATES[map[e.target.value]]; };
+    c.extra.innerHTML=`<div class="actions"><button class="btn small f-langs">List Judge0 languages</button></div><div class="f-langout"></div>`;
+    $('.f-langs',c.extra).onclick=async()=>{ const o=$('.f-langout',c.extra); o.innerHTML='<span class="spin"></span>';
+      const r=await call('GET',JUDGE0+'/languages'); o.innerHTML = r.ok ? `<div class="tbl" style="max-height:300px;overflow:auto;margin-top:8px"><table><tr><th>id</th><th>name</th></tr>${r.data.map(l=>`<tr><td>${l.id}</td><td>${esc(l.name)}</td></tr>`).join('')}</table></div>` : renderError(r); }; },
+  getBody:c=>{ const b={source_code:$('.f-code',c.form).value,language_id:+$('.f-lid',c.form).value,stdin:$('.f-stdin',c.form).value}; const e=$('.f-exp',c.form).value; if(e) b.expected_output=e; return b; },
+  render:d=>runResult({status_id:d.status?.id,status:d.status?.description,stdout:d.stdout||'',stderr:d.stderr||'',compile_output:d.compile_output||'',time:d.time,memory:d.memory}) + (d.message?`<div class="box warn">${esc(d.message)}</div>`:'') + `<div class="hint">token ${esc(d.token)}</div>`});
+
+// ---------------------------------------------------------------- boot
+(function boot(){
+  const nav=$('#nav'), main=$('#main'); let g='';
+  for(const p of PAGES){
+    if(p.group!==g){ g=p.group; nav.insertAdjacentHTML('beforeend',`<div class="grp">${esc(g)}</div>`); }
+    const b=document.createElement('button'); b.dataset.id=p.id;
+    b.innerHTML=`${esc(p.title)}<span class="m">${p.method} ${esc(p.path||'/submissions')}</span>`; b.onclick=()=>go(p.id); nav.appendChild(b);
+    main.appendChild(buildPage(p));
+  }
+  // grade page: button to load the last generated paper with empty answers
+  const gp=PAGES.find(p=>p.id==='grade').ctx;
+  gp.extra.innerHTML=`<div class="actions"><button class="btn small" id="loadPaper">Load last generated paper</button><span class="hint">Fills <code>paper</code> from the Generate page and creates empty answers you can edit.</span></div>`;
+  $('#loadPaper').onclick=()=>{ if(!state.paper){ $('#loadPaper').nextElementSibling.textContent='Generate a paper first.'; return; }
+    const answers={}; for(const q of state.paper.questions){ answers[q.id] = q.type==='mcq'?0 : q.type==='multi_select'?[] : q.type==='short_answer'?'' : {language:'python',source_code:''}; }
+    $('.json',gp.el).value=JSON.stringify({paper:state.paper.questions,answers,pass_percent:60},null,2); };
+
+  const start = location.hash.slice(1);
+  go(PAGES.some(p=>p.id===start) ? start : 'generate');
+  $('#baseinfo').textContent = 'API: ' + (BASE || location.origin);
+  const ping=async()=>{ const r=await call('GET',BASE+'/health',undefined,5000);
+    $('#hdot').className='dot '+(r.ok&&r.data.ok?'ok':'bad'); $('#htext').textContent=r.ok&&r.data.ok?'analyzer up':'analyzer down'; };
+  ping(); setInterval(ping,15000);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,687 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+/* ============================================
+   JEMS DESIGN SYSTEM — Light Premium Theme
+   ============================================ */
+
+@theme {
+  /* Brand colors */
+  --color-navy: #111827;
+  --color-slate: #ea580c;
+  --color-orange: #ea580c;
+  --color-gold: #f59e0b;
+  --color-emerald: #10b981;
+  --color-offwhite: #fffbf0;
+  --color-lightgray: #e8e4dd;
+  --color-mediumgray: #6b6660;
+  /* Warm neutral surfaces — the app never mixes in cool slate grays. */
+  --color-surface: #f5f2ec;
+  --color-surface-2: #faf8f4;
+  --color-ink-soft: #57534e;
+
+  /* Typography */
+  --font-sans: var(--font-geist), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-bricolage), var(--font-geist), ui-sans-serif, system-ui, sans-serif;
+
+  /* Shadows — subtle premium */
+  --shadow-soft: 0 1px 2px rgba(17, 24, 39, 0.04), 0 4px 12px -2px rgba(17, 24, 39, 0.06);
+  --shadow-card: 0 2px 4px rgba(17, 24, 39, 0.04), 0 12px 28px -8px rgba(17, 24, 39, 0.12);
+  --shadow-cta: 0 4px 14px -2px rgba(234, 88, 12, 0.35);
+  --shadow-primary: 0 4px 14px -2px rgba(234, 88, 12, 0.35);
+  --shadow-lift: 0 4px 8px rgba(17, 24, 39, 0.05), 0 24px 48px -16px rgba(17, 24, 39, 0.16);
+
+  /* Animations */
+  --animate-fade-in: fade-in 0.2s ease-out;
+  --animate-slide-down: slide-down 0.25s ease-out;
+  --animate-float: float 12s ease-in-out infinite;
+  --animate-float-slow: float-slow 16s ease-in-out infinite;
+  --animate-ring: ring-fill 1.2s ease-out forwards;
+  --animate-pulse-glow: pulse-glow 6s ease-in-out infinite;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slide-down {
+  from {
+    opacity: 0;
+    transform: translateY(-12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes float {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(0, -28px, 0) scale(1.06);
+  }
+}
+
+@keyframes pulse-glow {
+  0%,
+  100% {
+    opacity: 0.45;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.75;
+    transform: scale(1.08);
+  }
+}
+
+@keyframes float-slow {
+  0%, 100% {
+    transform: translate(0, 0) scale(1);
+  }
+  33% {
+    transform: translate(-30px, -30px) scale(1.08);
+  }
+  66% {
+    transform: translate(30px, -20px) scale(1.12);
+  }
+}
+
+body {
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  caret-color: #ea580c;
+  accent-color: #ea580c;
+  /* Custom themed cursor — a crisp orange arrow with a soft white outline. */
+  cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='28' viewBox='0 0 28 28'%3E%3Cpath d='M5 3 L5 22 L10 17.5 L13.4 24.5 L16.2 23.2 L12.8 16.5 L19 16.5 Z' fill='%23EA580C' stroke='white' stroke-width='1.4' stroke-linejoin='round'/%3E%3C/svg%3E")
+      4 3,
+    auto;
+}
+
+/* Interactive elements get a themed pointing-finger (hand) cursor with a
+   noticeably long index finger. */
+a,
+button,
+[role="button"],
+[role="menuitem"],
+label[for],
+summary,
+.cursor-pointer {
+  cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='34' height='34' viewBox='0 0 34 34'%3E%3Cpath d='M11 1c-1.1 0-2 .9-2 2v13.4L7.6 14.8c-.8-.8-2-.8-2.8 0s-.8 2 0 2.8l5.2 5.6c.9 1 2.2 1.6 3.7 1.6h3.1c2.8 0 5-2.2 5-5v-5.6c0-1.1-.9-2-2-2-.3 0-.6.1-.9.2-.2-.9-1-1.6-1.9-1.6-.4 0-.7.1-1 .3-.3-.7-1-1.2-1.8-1.2-.3 0-.6.1-.9.2V3c0-1.1-.9-2-2-2z' fill='%23FED7AA' stroke='%23FB923C' stroke-width='1.3' stroke-linejoin='round'/%3E%3C/svg%3E")
+      10 1,
+    pointer;
+}
+
+/* While pressing, the index finger retracts — a "finger clicking" feel. */
+a:active,
+button:active,
+[role="button"]:active,
+[role="menuitem"]:active,
+label[for]:active,
+summary:active,
+.cursor-pointer:active {
+  cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='34' height='34' viewBox='0 0 34 34'%3E%3Cpath d='M11 7c-1.1 0-2 .9-2 2v7.4L7.6 14.8c-.8-.8-2-.8-2.8 0s-.8 2 0 2.8l5.2 5.6c.9 1 2.2 1.6 3.7 1.6h3.1c2.8 0 5-2.2 5-5v-5.6c0-1.1-.9-2-2-2-.3 0-.6.1-.9.2-.2-.9-1-1.6-1.9-1.6-.4 0-.7.1-1 .3-.3-.7-1-1.2-1.8-1.2-.3 0-.6.1-.9.2V9c0-1.1-.9-2-2-2z' fill='%23FDBA74' stroke='%23F97316' stroke-width='1.3' stroke-linejoin='round'/%3E%3Cpath d='M8 4l-1.6-1.6M11 3V1M14 4l1.6-1.6' stroke='%23FB923C' stroke-width='1.4' stroke-linecap='round'/%3E%3C/svg%3E")
+      10 7,
+    pointer;
+}
+
+/* Headlines use the display face; body copy stays on the sans. */
+h1,
+h2,
+h3,
+.font-display {
+  font-family: var(--font-display);
+  font-optical-sizing: auto;
+}
+h1,
+h2,
+h3 {
+  text-wrap: balance;
+}
+p {
+  text-wrap: pretty;
+}
+/* Numbers line up in tables, stat tiles and match scores. */
+.tabular,
+table,
+kbd,
+[data-numeric] {
+  font-variant-numeric: tabular-nums;
+}
+a {
+  text-underline-offset: 0.18em;
+  text-decoration-thickness: 1px;
+}
+
+/* One focus ring for the whole product — visible, branded, never a browser default. */
+:focus-visible {
+  outline: 2px solid #ea580c;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: none;
+}
+
+/* Keyboard users get a way past the chrome. */
+.skip-link {
+  position: fixed;
+  top: 0.75rem;
+  left: 0.75rem;
+  z-index: 100;
+  transform: translateY(-200%);
+  border-radius: 9999px;
+  background: #111827;
+  color: #fff;
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  transition: transform 0.2s ease-out;
+}
+.skip-link:focus-visible {
+  transform: translateY(0);
+  outline-offset: 3px;
+}
+
+/* Branded text selection — soft orange highlight matching the theme. */
+::selection {
+  background-color: rgba(251, 146, 60, 0.32);
+}
+::-moz-selection {
+  background-color: rgba(251, 146, 60, 0.32);
+}
+
+/* Reusable gradient utilities */
+
+/* Orange — reserved for top-of-funnel conversion CTAs & urgency only. */
+.bg-cta-gradient {
+  background-image: linear-gradient(135deg, #ea580c 0%, #f59e0b 100%);
+}
+
+/* Orange — the primary in-app / dashboard action color. */
+.bg-primary-gradient {
+  background-image: linear-gradient(135deg, #f97316 0%, #c2410c 100%);
+}
+
+.bg-hero-gradient {
+  background-image: linear-gradient(180deg, #ffffff 0%, #fff8ef 100%);
+}
+
+/* Single continuous page canvas — rendered once as a fixed layer behind ALL
+   content (see app/layout.tsx). Every section is transparent and shares this
+   exact background, so there are no per-section seams. */
+.bg-page-canvas {
+  background-color: #fffdfa;
+  background-image:
+    radial-gradient(75% 60% at 15% 0%, rgba(234, 88, 12, 0.06), transparent 85%),
+    radial-gradient(60% 50% at 90% 10%, rgba(245, 158, 11, 0.06), transparent 85%),
+    radial-gradient(90% 70% at 50% 100%, rgba(245, 158, 11, 0.04), transparent 85%);
+}
+
+/* Fine paper grain so large flat areas don't read as sterile vectors. */
+.bg-page-canvas::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  opacity: 0.035;
+  mix-blend-mode: multiply;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* Hero entrance — words sharpen and rise; the page's single authored moment. */
+@keyframes hero-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+    filter: blur(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0);
+  }
+}
+.hero-in {
+  animation: hero-in 0.9s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation-delay: var(--d, 0ms);
+}
+@media (prefers-reduced-motion: reduce) {
+  .hero-in {
+    animation: none;
+  }
+}
+
+/* Auto-scrolling logo marquee (Companies section). */
+@keyframes marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+.animate-marquee {
+  animation: marquee 38s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-marquee {
+    animation: none;
+  }
+}
+
+/* Radial spotlight + dotted texture layers for the hero background. */
+.bg-hero-spotlight {
+  background-image:
+    radial-gradient(55% 50% at 78% 30%, rgba(234, 88, 12, 0.14) 0%, transparent 70%),
+    radial-gradient(45% 45% at 15% 85%, rgba(245, 158, 11, 0.12) 0%, transparent 70%);
+}
+
+.bg-hero-dots {
+  background-image: radial-gradient(rgba(17, 24, 39, 0.06) 1px, transparent 1px);
+  background-size: 22px 22px;
+  -webkit-mask-image: radial-gradient(60% 70% at 75% 40%, #000 0%, transparent 75%);
+  mask-image: radial-gradient(60% 70% at 75% 40%, #000 0%, transparent 75%);
+}
+
+/* Smooth scroll for in-page anchors */
+html {
+  scroll-behavior: smooth;
+  /* Offset anchor scrolling for the fixed navbar (h-16). */
+  scroll-padding-top: 4.5rem;
+  /* Soft orange scrollbar (Firefox). */
+  scrollbar-color: #fdba74 #faf8f4;
+  scrollbar-width: thin;
+}
+
+/* Orange-themed scrollbar (WebKit / Chromium / Edge). */
+::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+
+::-webkit-scrollbar-track {
+  background: #faf8f4;
+}
+
+::-webkit-scrollbar-thumb {
+  border-radius: 9999px;
+  border: 3px solid #faf8f4;
+  background: linear-gradient(180deg, #fdba74 0%, #fcd9b6 100%);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, #fb923c 0%, #fdba74 100%);
+}
+
+::-webkit-scrollbar-corner {
+  background: #faf8f4;
+}
+
+/* ── Click ripple (macOS-style tap feedback) ─────────────────────── */
+.click-ripple {
+  position: fixed;
+  z-index: 9999;
+  /* Keep width === height and margin === -half so it stays a centered circle. */
+  width: 18px;
+  height: 18px;
+  margin: -9px 0 0 -9px;
+  border-radius: 50%;
+  pointer-events: none;
+  background: radial-gradient(
+    circle,
+    rgba(234, 88, 12, 0.5) 0%,
+    rgba(234, 88, 12, 0.3) 55%,
+    transparent 72%
+  );
+  border: 1.5px solid rgba(234, 88, 12, 0.8);
+  animation: click-ripple 0.95s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+@keyframes click-ripple {
+  0% {
+    transform: scale(0.25);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(2);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .click-ripple {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-float,
+  .animate-float-slow,
+  .animate-fade-in {
+    animation: none;
+  }
+}
+
+/* Welcome avatar: rises in once, then keeps a slow idle bob. The ground
+   shadow breathes in sync so the motion reads as lift, not drift. */
+@keyframes avatar-rise {
+  from {
+    opacity: 0;
+    transform: translateY(26px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes avatar-bob {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-14px);
+  }
+}
+
+@keyframes avatar-shadow {
+  0%,
+  100% {
+    transform: scaleX(1);
+    opacity: 0.26;
+  }
+  50% {
+    transform: scaleX(0.84);
+    opacity: 0.12;
+  }
+}
+
+.avatar-rise {
+  animation: avatar-rise 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.avatar-bob {
+  animation: avatar-bob 4.2s ease-in-out 0.7s infinite;
+}
+.avatar-shadow {
+  animation: avatar-shadow 4.2s ease-in-out 0.7s infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .avatar-rise,
+  .avatar-bob,
+  .avatar-shadow {
+    animation: none;
+  }
+}
+
+/* Tour guide: pops in when the step changes, then nudges toward whatever he is
+   pointing at, so the motion reinforces the direction rather than decorating. */
+@keyframes tour-avatar-in {
+  from {
+    opacity: 0;
+    transform: scale(0.84);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes tour-nudge-left {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  50% {
+    transform: translateX(-7px);
+  }
+}
+
+@keyframes tour-nudge-right {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  50% {
+    transform: translateX(7px);
+  }
+}
+
+@keyframes tour-nudge-down {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(7px);
+  }
+}
+
+.tour-avatar-in {
+  animation: tour-avatar-in 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.tour-nudge-left {
+  animation: tour-nudge-left 2.4s ease-in-out 0.45s infinite;
+}
+.tour-nudge-right {
+  animation: tour-nudge-right 2.4s ease-in-out 0.45s infinite;
+}
+.tour-nudge-down {
+  animation: tour-nudge-down 2.4s ease-in-out 0.45s infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tour-avatar-in,
+  .tour-nudge-left,
+  .tour-nudge-right,
+  .tour-nudge-down {
+    animation: none;
+  }
+}
+
+@theme inline {
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --color-foreground: var(--foreground);
+  --color-background: var(--background);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+:root {
+  --background: oklch(1 0 0);
+  --foreground: #111827;
+  --card: oklch(1 0 0);
+  --card-foreground: #111827;
+  --popover: oklch(1 0 0);
+  --popover-foreground: #111827;
+  --primary: #ea580c;
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: #f5f2ec;
+  --secondary-foreground: #111827;
+  --muted: #f5f2ec;
+  --muted-foreground: #6b6660;
+  --accent: #fff3e6;
+  --accent-foreground: #9a3412;
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: #e8e4dd;
+  --input: #e8e4dd;
+  --ring: #ea580c;
+  --chart-1: oklch(0.87 0 0);
+  --chart-2: oklch(0.556 0 0);
+  --chart-3: oklch(0.439 0 0);
+  --chart-4: oklch(0.371 0 0);
+  --chart-5: oklch(0.269 0 0);
+  --radius: 0.625rem;
+  --sidebar: oklch(0.985 0 0);
+  --sidebar-foreground: oklch(0.145 0 0);
+  --sidebar-primary: oklch(0.205 0 0);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.97 0 0);
+  --sidebar-accent-foreground: oklch(0.205 0 0);
+  --sidebar-border: oklch(0.922 0 0);
+  --sidebar-ring: oklch(0.708 0 0);
+}
+
+.dark {
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.205 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.922 0 0);
+  --primary-foreground: oklch(0.205 0 0);
+  --secondary: oklch(0.269 0 0);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.269 0 0);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.556 0 0);
+  --chart-1: oklch(0.87 0 0);
+  --chart-2: oklch(0.556 0 0);
+  --chart-3: oklch(0.439 0 0);
+  --chart-4: oklch(0.371 0 0);
+  --chart-5: oklch(0.269 0 0);
+  --sidebar: oklch(0.205 0 0);
+  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar-primary: oklch(0.488 0.243 264.376);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.269 0 0);
+  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.556 0 0);
+}
+
+/* ── Signup flow: role-based accent theming ──────────────────────── */
+.signup-accent {
+  /* Students get the brand orange; companies get the navy ink. */
+  --accent: #ea580c;
+  --accent-tint: #fff3e6;
+  --accent-focus: rgba(234, 88, 12, 0.16);
+}
+.signup-accent[data-accent="navy"] {
+  --accent: #111827;
+  --accent-tint: #f5f2ec;
+  --accent-focus: rgba(17, 24, 39, 0.14);
+}
+
+/* Crisp bordered inputs with a soft resting shadow and a colored focus ring. */
+.signup-input {
+  border: 1.5px solid #e8e4dd;
+  box-shadow: 0 1px 2px rgba(17, 24, 39, 0.04);
+}
+.signup-input:hover {
+  border-color: #d6d0c6;
+}
+.signup-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 4px var(--accent-focus);
+}
+.signup-input[aria-invalid="true"] {
+  border-color: #fca5a5;
+  box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.1);
+}
+.signup-input[aria-invalid="true"]:focus {
+  border-color: #ef4444;
+}
+
+/* Secondary "chip" buttons (Verify, Back) — bordered so they read as buttons
+   even resting on the same white card background as everything else. */
+.signup-chip-btn {
+  border: 1.5px solid #e8e4dd;
+  box-shadow: 0 1px 2px rgba(17, 24, 39, 0.04);
+}
+.signup-chip-btn:hover:not(:disabled) {
+  border-color: #d6d0c6;
+  box-shadow: 0 2px 6px rgba(17, 24, 39, 0.06);
+}
+.signup-chip-btn:disabled {
+  box-shadow: none;
+}
+
+/* Print only the resume sheet when "Download as PDF" calls window.print(). */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  .resume-print,
+  .resume-print * {
+    visibility: visible;
+  }
+  .resume-print {
+    position: absolute;
+    inset: 0;
+    margin: 0;
+    width: 100%;
+    max-width: none;
+    box-shadow: none;
+    aspect-ratio: auto;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  html {
+    @apply font-sans;
+  }
+}

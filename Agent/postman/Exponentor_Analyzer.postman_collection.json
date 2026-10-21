@@ -1,0 +1,746 @@
+{
+  "info": {
+    "_postman_id": "7b3d3619-e1a4-454d-a357-e170e5d330e0",
+    "name": "Exponentor Analyzer Agents",
+    "description": "All endpoints of the `analyzer` service (see API_GUIDE.md).\n\n**Setup:** import `Exponentor_Analyzer.postman_environment.json` too and select it.\n\n**How variables work:** every body reads its values from the environment. A collection script exposes each environment value as `{{json_<name>}}` (arrays/objects as-is, text quoted), and each request's test script writes its results back to the environment, so the next request picks them up.\n\n**Suggested order (or use Run collection):** Health -> Prerequisites -> Profile -> Roadmap -> Generate paper -> Run code -> Grade written answer -> Grade submission -> Match explanation.\n\nAI calls can take 30-120 s; keep Postman's request timeout at 0 (no limit) or at least 300000 ms.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Runs before every request.",
+          "// 1. Make sure an environment is selected (the test scripts save their results into it).",
+          "if (!pm.environment.name) {",
+          "    throw new Error(\"Select the 'Exponentor Analyzer - Local' environment (top right) before sending requests.\");",
+          "}",
+          "",
+          "// 2. Expose every environment value as {{json_<name>}} so request bodies stay valid JSON:",
+          "//    arrays/objects are inserted as they are, everything else is inserted as a quoted JSON string.",
+          "//    Numbers in bodies use the plain {{name}} form instead.",
+          "const env = pm.environment.toObject();",
+          "Object.keys(env).forEach(function (key) {",
+          "    const value = env[key];",
+          "    let out = JSON.stringify(value === undefined || value === null ? \"\" : String(value));",
+          "    if (typeof value === \"string\") {",
+          "        try {",
+          "            const parsed = JSON.parse(value);",
+          "            if (parsed !== null && typeof parsed === \"object\") out = value;",
+          "        } catch (e) { /* plain text */ }",
+          "    } else if (value !== null && typeof value === \"object\") {",
+          "        out = JSON.stringify(value);",
+          "    }",
+          "    pm.variables.set(\"json_\" + key, out);",
+          "});"
+        ]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Runs after every request.",
+          "pm.test(\"Status is 2xx\", function () {",
+          "    pm.expect(pm.response.code, pm.response.text()).to.be.within(200, 299);",
+          "});",
+          "console.log(pm.info.requestName + \" -> \" + pm.response.code + \" in \" + pm.response.responseTime + \" ms\");"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "Agents",
+      "item": [
+        {
+          "name": "Health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/health",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "health"
+              ]
+            },
+            "description": "Check the analyzer is up."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Service reports ok\", function () {",
+                  "    pm.expect(pm.response.json().ok).to.eql(true);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Prerequisites (prereqs agent)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/agents/prereqs",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "agents",
+                "prereqs"
+              ]
+            },
+            "description": "Company skills -> prerequisite tree. Uses `companySkills`. Saves `prereqTree`, `targetSkill`, `missingSkills`, `assessmentSkill`, `assessmentTopics` from the first skill. 15-60 s per skill.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"skills\": {{json_companySkills}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code !== 200) return;",
+                  "const data = pm.response.json();",
+                  "const first = (data.skills || [])[0];",
+                  "pm.test(\"Got a prerequisite tree\", function () {",
+                  "    pm.expect(first, \"no skills in response\").to.be.an(\"object\");",
+                  "    pm.expect(first.prerequisites).to.be.an(\"array\").that.is.not.empty;",
+                  "});",
+                  "if (!first || !(first.prerequisites || []).length) return;",
+                  "",
+                  "const prereqs = first.prerequisites;",
+                  "pm.environment.set(\"prereqTree\", JSON.stringify(data.skills));",
+                  "pm.environment.set(\"targetSkill\", first.skill);",
+                  "pm.environment.set(\"missingSkills\", JSON.stringify(prereqs.map(function (p) { return p.name; })));",
+                  "// The first prerequisite is the foundation, so it is the first skill to assess.",
+                  "pm.environment.set(\"assessmentSkill\", prereqs[0].name);",
+                  "pm.environment.set(\"assessmentTopics\", JSON.stringify(prereqs[0].topics || []));",
+                  "",
+                  "if (first.warnings) console.warn(\"Prerequisite tree has warnings:\", first.warnings);",
+                  "console.log(\"Saved targetSkill, missingSkills, assessmentSkill, assessmentTopics from \" + first.skill);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Profile (profile agent)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/agents/profile",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "agents",
+                "profile"
+              ]
+            },
+            "description": "GitHub / LeetCode / HackerRank data -> skills. Uses `githubData`, `leetcodeData`, `hackerrankData`. Saves `profileSkills`, `profileSummary`.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"github\": {{json_githubData}},\n  \"leetcode\": {{json_leetcodeData}},\n  \"hackerrank\": {{json_hackerrankData}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code !== 200) return;",
+                  "const data = pm.response.json();",
+                  "pm.test(\"Got profile skills\", function () {",
+                  "    pm.expect(data.skills).to.be.an(\"array\");",
+                  "});",
+                  "const skills = data.skills || [];",
+                  "pm.environment.set(\"profileSkills\", JSON.stringify(skills.map(function (s) { return s.name; })));",
+                  "pm.environment.set(\"profileSummary\", data.summary || \"\");",
+                  "console.log(\"Saved profileSkills:\", skills.map(function (s) { return s.name + \" (\" + s.confidence + \")\"; }));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Roadmap (roadmap agent)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/agents/roadmap",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "agents",
+                "roadmap"
+              ]
+            },
+            "description": "Prerequisites + target skill -> syllabus. Uses `missingSkills`, `targetSkill` (filled by Prerequisites). Saves `roadmapTotalWeeks`, `roadmapSteps`. 30-120 s.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"missing_skills\": {{json_missingSkills}},\n  \"target_skill\": {{json_targetSkill}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code !== 200) return;",
+                  "const data = pm.response.json();",
+                  "pm.test(\"Roadmap has steps and the target comes last\", function () {",
+                  "    pm.expect(data.steps).to.be.an(\"array\").that.is.not.empty;",
+                  "    if (data.target_skill) pm.expect(data.steps[data.steps.length - 1].role).to.eql(\"target\");",
+                  "});",
+                  "pm.environment.set(\"roadmapTotalWeeks\", String(data.total_weeks));",
+                  "pm.environment.set(\"roadmapSteps\", JSON.stringify((data.steps || []).map(function (s) { return s.skill; })));",
+                  "(data.steps || []).forEach(function (s) {",
+                  "    if (s.warnings) console.warn(\"Step '\" + s.skill + \"' has warnings:\", s.warnings);",
+                  "});",
+                  "console.log(\"Roadmap: \" + (data.steps || []).length + \" steps, \" + data.total_weeks + \" weeks\");"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Simple MCQ (assessment agent)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/agents/assessment",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "agents",
+                "assessment"
+              ]
+            },
+            "description": "Older MCQ-only endpoint. Uses `assessmentSkill`, `assessmentTopics`, `mcqCount`. Saves `mcqQuestions`.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"skill\": {{json_assessmentSkill}},\n  \"topics\": {{json_assessmentTopics}},\n  \"count\": {{mcqCount}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code !== 200) return;",
+                  "const data = pm.response.json();",
+                  "pm.test(\"Got MCQ questions with 4 options\", function () {",
+                  "    pm.expect(data.questions).to.be.an(\"array\").that.is.not.empty;",
+                  "    data.questions.forEach(function (q) { pm.expect(q.options).to.have.lengthOf(4); });",
+                  "});",
+                  "pm.environment.set(\"mcqQuestions\", JSON.stringify(data.questions || []));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Match explanation (match agent)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/agents/match",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "agents",
+                "match"
+              ]
+            },
+            "description": "Explains why a student fits a company. The pre-request script calculates `matchScore` from `verifiedSkills` and `companySkills`. Saves `matchRecommendation`.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"student\": {\n    \"name\": {{json_studentName}},\n    \"verified_skills\": {{json_verifiedSkills}}\n  },\n  \"company\": {\n    \"name\": {{json_companyName}},\n    \"required_skills\": {{json_companySkills}}\n  },\n  \"match_score\": {{matchScore}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Calculate the match score in code (verified required skills / required skills), as the API guide says.",
+                  "function list(name) {",
+                  "    try { return JSON.parse(pm.environment.get(name) || \"[]\"); } catch (e) { return []; }",
+                  "}",
+                  "const verified = list(\"verifiedSkills\").map(function (s) { return String(s).trim().toLowerCase(); });",
+                  "const required = list(\"companySkills\");",
+                  "const hits = required.filter(function (s) { return verified.indexOf(String(s).trim().toLowerCase()) !== -1; });",
+                  "const score = required.length ? Math.round(100 * hits.length / required.length) : 0;",
+                  "pm.environment.set(\"matchScore\", String(score));",
+                  "pm.variables.set(\"matchScore\", String(score));",
+                  "console.log(\"Match score \" + score + \"% (\" + hits.length + \" of \" + required.length + \" required skills verified)\");"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code !== 200) return;",
+                  "const data = pm.response.json();",
+                  "pm.test(\"Got strengths, gaps and a recommendation\", function () {",
+                  "    pm.expect(data).to.have.keys(\"strengths\", \"gaps\", \"recommendation\");",
+                  "});",
+                  "pm.environment.set(\"matchRecommendation\", data.recommendation || \"\");"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Assessment",
+      "item": [
+        {
+          "name": "Generate paper",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/assessment/generate",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "assessment",
+                "generate"
+              ]
+            },
+            "description": "Mixed question paper. Uses `assessmentSkill`, `assessmentTopics`, `difficulty`, `assessmentCounts`. Saves `paperId`, `paperQuestions` (with keys), `studentPaper`, and builds `studentAnswers` (see `studentAnswerMode`). Also fills the Grade written answer and Run code inputs from the paper. 30-90 s.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"skill\": {{json_assessmentSkill}},\n  \"topics\": {{json_assessmentTopics}},\n  \"difficulty\": {{json_difficulty}},\n  \"counts\": {{json_assessmentCounts}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code !== 200) return;",
+                  "const data = pm.response.json();",
+                  "const questions = data.questions || [];",
+                  "pm.test(\"Paper has questions and a student view\", function () {",
+                  "    pm.expect(questions).to.be.an(\"array\").that.is.not.empty;",
+                  "    pm.expect(data.student_paper).to.have.lengthOf(questions.length);",
+                  "});",
+                  "pm.test(\"Student paper hides keys and hidden tests\", function () {",
+                  "    (data.student_paper || []).forEach(function (q) {",
+                  "        pm.expect(q).to.not.have.property(\"key\");",
+                  "        pm.expect(q).to.not.have.property(\"hidden\");",
+                  "    });",
+                  "});",
+                  "if (data.warnings && data.warnings.length) console.warn(\"Paper warnings:\", data.warnings);",
+                  "",
+                  "pm.environment.set(\"paperId\", data.paper_id);",
+                  "pm.environment.set(\"paperSkill\", data.skill);",
+                  "pm.environment.set(\"paperTotalMarks\", String(data.total_marks));",
+                  "pm.environment.set(\"paperQuestions\", JSON.stringify(questions));",
+                  "pm.environment.set(\"studentPaper\", JSON.stringify(data.student_paper || []));",
+                  "",
+                  "// Build a submission for /assessment/grade.",
+                  "// studentAnswerMode = \"correct\" answers from the keys, \"wrong\" answers badly (to see failing results).",
+                  "const correct = (pm.environment.get(\"studentAnswerMode\") || \"correct\") !== \"wrong\";",
+                  "const codingAnswer = {",
+                  "    language: pm.environment.get(\"codingLanguage\") || \"python\",",
+                  "    source_code: pm.environment.get(\"codingSourceCode\") || \"print(0)\"",
+                  "};",
+                  "const answers = {};",
+                  "questions.forEach(function (q) {",
+                  "    if (q.type === \"mcq\") {",
+                  "        answers[q.id] = correct ? q.key.answer_index : (q.key.answer_index + 1) % q.options.length;",
+                  "    } else if (q.type === \"multi_select\") {",
+                  "        answers[q.id] = correct ? q.key.answer_indexes : [];",
+                  "    } else if (q.type === \"short_answer\") {",
+                  "        answers[q.id] = correct ? q.key.model_answer : \"I am not sure.\";",
+                  "    } else if (q.type === \"coding\") {",
+                  "        answers[q.id] = codingAnswer;",
+                  "    }",
+                  "});",
+                  "pm.environment.set(\"studentAnswers\", JSON.stringify(answers));",
+                  "",
+                  "// Feed the single-question endpoints from this paper.",
+                  "const written = questions.find(function (q) { return q.type === \"short_answer\"; });",
+                  "if (written) {",
+                  "    pm.environment.set(\"gradeTextQuestion\", written.text);",
+                  "    pm.environment.set(\"gradeTextKeyPoints\", JSON.stringify(written.key.key_points));",
+                  "    pm.environment.set(\"gradeTextAnswer\", written.key.model_answer);",
+                  "    pm.environment.set(\"gradeTextMaxMarks\", String(written.marks));",
+                  "}",
+                  "const coding = questions.find(function (q) { return q.type === \"coding\"; });",
+                  "if (coding && coding.samples && coding.samples.length) {",
+                  "    pm.environment.set(\"codingQuestionId\", coding.id);",
+                  "    pm.environment.set(\"codingStdin\", coding.samples[0].input);",
+                  "    pm.environment.set(\"codingExpected\", coding.samples[0].expected);",
+                  "    console.log(\"Coding question \" + coding.id + \": \" + coding.title + \". Put your solution in codingSourceCode, then send 'Run code' and 'Grade submission'.\");",
+                  "}",
+                  "console.log(\"Saved paper \" + data.paper_id + \" (\" + questions.length + \" questions, \" + data.total_marks + \" marks)\");"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Run code",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/assessment/run-code",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "assessment",
+                "run-code"
+              ]
+            },
+            "description": "The student's Run button. Uses `codingLanguage`, `codingSourceCode`, `codingStdin`. If `codingExpected` is set (from Generate paper) the output is compared with it.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"language\": {{json_codingLanguage}},\n  \"source_code\": {{json_codingSourceCode}},\n  \"stdin\": {{json_codingStdin}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code !== 200) return;",
+                  "const data = pm.response.json();",
+                  "pm.environment.set(\"runStatus\", data.status);",
+                  "pm.environment.set(\"runStdout\", data.stdout || \"\");",
+                  "pm.test(\"Program ran (status 3 Accepted)\", function () {",
+                  "    pm.expect(data.status_id, data.stderr || data.compile_output || data.status).to.eql(3);",
+                  "});",
+                  "const expected = pm.environment.get(\"codingExpected\");",
+                  "if (expected) {",
+                  "    pm.test(\"Output matches the sample's expected output\", function () {",
+                  "        pm.expect((data.stdout || \"\").trim()).to.eql(String(expected).trim());",
+                  "    });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Grade written answer",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/assessment/grade-text",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "assessment",
+                "grade-text"
+              ]
+            },
+            "description": "Grade one written answer. Inputs are filled by Generate paper (first short_answer question). Saves `gradeTextScore`.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"question\": {{json_gradeTextQuestion}},\n  \"key_points\": {{json_gradeTextKeyPoints}},\n  \"answer\": {{json_gradeTextAnswer}},\n  \"max_marks\": {{gradeTextMaxMarks}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code !== 200) return;",
+                  "const data = pm.response.json();",
+                  "pm.test(\"Score is between 0 and max\", function () {",
+                  "    pm.expect(data.score).to.be.within(0, data.max);",
+                  "});",
+                  "pm.environment.set(\"gradeTextScore\", String(data.score));",
+                  "if (data.needs_review) console.warn(\"Written answer flagged for review\");",
+                  "console.log(\"Written answer: \" + data.score + \"/\" + data.max + \", missing:\", data.missing);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Grade submission",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/assessment/grade",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "assessment",
+                "grade"
+              ]
+            },
+            "description": "Grade a whole submission. Uses `paperQuestions` and `studentAnswers` (from Generate paper), `passPercent`. Saves `gradeScore`, `gradePercent`, `gradePassed`, `gradeNeedsReview`; a pass adds `paperSkill` to `verifiedSkills`.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"paper\": {{json_paperQuestions}},\n  \"answers\": {{json_studentAnswers}},\n  \"pass_percent\": {{passPercent}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code !== 200) return;",
+                  "const data = pm.response.json();",
+                  "pm.test(\"Got a score for every question\", function () {",
+                  "    pm.expect(data.results).to.be.an(\"array\").that.is.not.empty;",
+                  "    pm.expect(data.percent).to.be.within(0, 100);",
+                  "});",
+                  "pm.environment.set(\"gradeScore\", String(data.score));",
+                  "pm.environment.set(\"gradePercent\", String(data.percent));",
+                  "pm.environment.set(\"gradePassed\", String(data.passed));",
+                  "pm.environment.set(\"gradeNeedsReview\", JSON.stringify(data.needs_review || []));",
+                  "",
+                  "// A passed assessment verifies the skill, which the match request then uses.",
+                  "const skill = pm.environment.get(\"paperSkill\");",
+                  "if (data.passed && skill) {",
+                  "    let verified = [];",
+                  "    try { verified = JSON.parse(pm.environment.get(\"verifiedSkills\") || \"[]\"); } catch (e) {}",
+                  "    const known = verified.some(function (s) { return String(s).toLowerCase() === skill.toLowerCase(); });",
+                  "    if (!known) {",
+                  "        verified.push(skill);",
+                  "        pm.environment.set(\"verifiedSkills\", JSON.stringify(verified));",
+                  "        console.log(\"Passed: added '\" + skill + \"' to verifiedSkills\");",
+                  "    }",
+                  "}",
+                  "console.log(\"Grade: \" + data.score + \"/\" + data.total + \" (\" + data.percent + \"%), passed: \" + data.passed);"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Judge0 (direct)",
+      "item": [
+        {
+          "name": "Run program directly",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{judge0Url}}/submissions?base64_encoded=false&wait=true",
+              "host": [
+                "{{judge0Url}}"
+              ],
+              "path": [
+                "submissions"
+              ],
+              "query": [
+                {
+                  "key": "base64_encoded",
+                  "value": "false"
+                },
+                {
+                  "key": "wait",
+                  "value": "true"
+                }
+              ]
+            },
+            "description": "Call Judge0 itself to test it. Uses `codingSourceCode`, `codingStdin`, `judge0LanguageId` (71 = Python). Saves `judge0Token`.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"source_code\": {{json_codingSourceCode}},\n  \"language_id\": {{judge0LanguageId}},\n  \"stdin\": {{json_codingStdin}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code !== 200 && pm.response.code !== 201) return;",
+                  "const data = pm.response.json();",
+                  "pm.environment.set(\"judge0Token\", data.token || \"\");",
+                  "pm.test(\"Judge0 accepted the program\", function () {",
+                  "    pm.expect(data.status && data.status.id, data.stderr || data.compile_output).to.eql(3);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Languages",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{judge0Url}}/languages",
+              "host": [
+                "{{judge0Url}}"
+              ],
+              "path": [
+                "languages"
+              ]
+            },
+            "description": "List installed Judge0 languages."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code !== 200) return;",
+                  "const langs = pm.response.json();",
+                  "const wanted = { 71: \"python\", 62: \"java\", 54: \"cpp\", 50: \"c\", 63: \"javascript\" };",
+                  "pm.test(\"Languages used by the analyzer are installed\", function () {",
+                  "    Object.keys(wanted).forEach(function (id) {",
+                  "        pm.expect(langs.some(function (l) { return String(l.id) === id; }), wanted[id] + \" (\" + id + \")\").to.be.true;",
+                  "    });",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,32 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "bounce-easing",
+        "value": "animate-bounce-subtle",
+        "createdAt": "2026-09-23T19:00:21.667Z",
+        "reason": "Intentional playful animation for minimized button to draw user attention and encourage interaction - UX affordance pattern"
+      },
+      {
+        "rule": "side-tab",
+        "value": "*",
+        "files": [
+          "components/guide/GuideCharacter.tsx"
+        ],
+        "createdAt": "2026-09-23T19:02:33.428Z",
+        "reason": "Speech bubble tail/pointer is semantic design indicating message originates from character - intentional affordance"
+      },
+      {
+        "rule": "gradient-text",
+        "value": "*",
+        "files": [
+          "app/page.tsx"
+        ],
+        "createdAt": "2026-09-23T20:55:11.675Z",
+        "reason": "Deliberate brand signature element: gradient (orange→teal→cyan) encodes platform's core visual narrative—connecting students to companies. Specific to JEMS identity, not generic AI default. Approved creative design choice per frontend-design skill principles."
+      }
+    ]
+  }
+}
