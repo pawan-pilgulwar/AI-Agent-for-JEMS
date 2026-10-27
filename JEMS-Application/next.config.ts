@@ -36,6 +36,8 @@ const securityHeaders = [
       "style-src 'self' 'unsafe-inline'",
       "img-src 'self' data: blob: https://api.dicebear.com https://avatars.githubusercontent.com",
       "font-src 'self' data:",
+      // Learning path lessons embed YouTube videos (privacy-enhanced domain only).
+      "frame-src https://www.youtube-nocookie.com",
       connectSrc,
       "frame-ancestors 'none'",
       "base-uri 'self'",

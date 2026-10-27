@@ -29,6 +29,9 @@ export function ensureAiIndexes(db: Db): Promise<void> {
       db.collection("matchExplanations").createIndex({ jobId: 1, studentId: 1 }, { unique: true }),
       db.collection("mockInterviews").createIndex({ paperId: 1 }, { unique: true, partialFilterExpression: { paperId: { $exists: true } } }),
       db.collection("notifications").createIndex({ userId: 1, read: 1, createdAt: -1 }),
+      // Shared cache of generated lessons / notes; regenerated after 60 days.
+      db.collection("learningContent").createIndex({ cacheKey: 1 }, { unique: true }),
+      db.collection("learningContent").createIndex({ createdAt: 1 }, { expireAfterSeconds: 60 * DAY }),
     ])
       .then(() => undefined)
       .catch((err) => {

@@ -6,6 +6,7 @@ import { TaskInputError, type TaskHandler } from "@/lib/ai-tasks/context";
 import { PASS_MARK } from "@/lib/assessment/engine";
 import { recordSkillTestResult } from "@/lib/db/assessment";
 import { ensureAiIndexes } from "./indexes";
+import { recordModuleTest } from "./learning";
 import {
   type ClientAnswer,
   type PaperPurpose,
@@ -14,17 +15,19 @@ import {
   type PaperView,
   type QuestionReview,
   interviewType,
+  moduleSubjectKey,
   paperMinutes,
   skillTestCounts,
 } from "./papers-shared";
 import { isRecord, iso, num, skillKey, str, strArr } from "./util";
 
 /**
- * AI-generated papers: skill tests (`purpose: "skill"`) and mock interviews
- * (`purpose: "interview"`), via `/assessment/generate` and `/assessment/grade`.
+ * AI-generated papers: skill tests (`purpose: "skill"`), mock interviews
+ * (`purpose: "interview"`) and learning-path module tests (`purpose: "module"`),
+ * via `/assessment/generate` and `/assessment/grade`.
  *
  *  aiPapers {
- *    studentId, purpose, subject, subjectKey, interviewType, agentSkill, counts,
+ *    studentId, purpose, subject, subjectKey, interviewType, roadmapId + topics (module tests), agentSkill, counts,
  *    questions[]      FULL paper with answer keys + hidden tests — never sent to the browser
  *    studentPaper[]   the safe version shown to the student
  *    totalMarks, minutes, warnings[], status, startedAt, expiresAt,
@@ -34,7 +37,8 @@ import { isRecord, iso, num, skillKey, str, strArr } from "./util";
  * One document per (student, purpose, subject): generating again replaces the
  * paper in place. Grading writes the result back onto it and, for skill tests,
  * records the attempt in `skillAssessments` (verifying the skill on a clean
- * pass); for interviews it upserts the `mockInterviews` history row.
+ * pass); module tests do the same and also update their learning path; for
+ * interviews it upserts the `mockInterviews` history row.
  */
 
 /** Grace period for network lag after the timer runs out. */
@@ -47,6 +51,8 @@ async function getDb(): Promise<Db> {
 }
 
 const STATUSES: PaperStatus[] = ["ready", "in-progress", "submitted", "graded"];
+const PURPOSES: PaperPurpose[] = ["skill", "interview", "module"];
+const DIFFICULTIES = ["easy", "medium", "hard", "mixed"] as const;
 
 // ── Sanitising Agent output ─────────────────────────────────────
 
@@ -154,9 +160,10 @@ function summaryFromDoc(d: Document): PaperSummary {
   const result = d.result ? sanitizeResult(d.result) : null;
   return {
     id: d._id.toString(),
-    purpose: d.purpose === "interview" ? "interview" : "skill",
+    purpose: PURPOSES.includes(d.purpose) ? d.purpose : "skill",
     subject: str(d.subject),
     interviewType: str(d.interviewType) || null,
+    roadmapId: d.roadmapId instanceof ObjectId ? d.roadmapId.toString() : null,
     status: STATUSES.includes(d.status) ? d.status : "ready",
     totalMarks: num(d.totalMarks),
     questionCount: Array.isArray(d.studentPaper) ? d.studentPaper.length : 0,
@@ -266,14 +273,17 @@ export async function openPaper(userId: string, paperId: string): Promise<PaperV
   }
 }
 
-/** The paper (if any) for this subject — used to block regenerating while grading. */
-export async function findPaper(userId: string, purpose: PaperPurpose, subject: string): Promise<PaperSummary | null> {
+/**
+ * The paper (if any) for this subject — used to block regenerating while grading.
+ * Module tests are keyed per learning path: pass `moduleSubjectKey(roadmapId, skill)` as `subjectKey`.
+ */
+export async function findPaper(userId: string, purpose: PaperPurpose, subject: string, subjectKey = skillKey(subject)): Promise<PaperSummary | null> {
   if (!ObjectId.isValid(userId)) return null;
   try {
     const db = await getDb();
     const d = await db
       .collection("aiPapers")
-      .findOne({ studentId: new ObjectId(userId), purpose, subjectKey: skillKey(subject) }, { projection: { questions: 0 } });
+      .findOne({ studentId: new ObjectId(userId), purpose, subjectKey }, { projection: { questions: 0 } });
     return d ? summaryFromDoc(d) : null;
   } catch {
     return null;
@@ -340,15 +350,30 @@ export async function submitPaper(
 
 // ── Tasks ───────────────────────────────────────────────────────
 
-/** `assessment.generate` task. Input: `{ purpose, subject, interviewType?, includeCoding? }`. */
+/**
+ * `assessment.generate` task. Input: `{ purpose, subject, interviewType?, includeCoding? }`;
+ * module tests add `{ roadmapId, topics[], difficulty }` (the module's lessons, from its learning path).
+ */
 export const generateHandler: TaskHandler = async (ctx) => {
-  const purpose: PaperPurpose = ctx.input.purpose === "interview" ? "interview" : "skill";
+  const purpose: PaperPurpose = PURPOSES.includes(ctx.input.purpose as PaperPurpose) ? (ctx.input.purpose as PaperPurpose) : "skill";
   const db = await getDb();
 
-  let subject = str(ctx.input.subject, 80).trim();
+  let subject = str(ctx.input.subject, 120).trim();
   let agentSkill = subject;
   let counts = skillTestCounts(Boolean(ctx.input.includeCoding));
   let typeId: string | null = null;
+  let topics: string[] = [];
+  let difficulty: (typeof DIFFICULTIES)[number] = "mixed";
+  let roadmapId: ObjectId | null = null;
+
+  if (purpose === "module") {
+    const rid = str(ctx.input.roadmapId, 24);
+    if (!ObjectId.isValid(rid)) throw new TaskInputError("Learning path not found.");
+    roadmapId = new ObjectId(rid);
+    topics = strArr(ctx.input.topics, 8, 200);
+    const d = str(ctx.input.difficulty);
+    if ((DIFFICULTIES as readonly string[]).includes(d)) difficulty = d as (typeof DIFFICULTIES)[number];
+  }
 
   if (purpose === "interview") {
     const t = interviewType(str(ctx.input.interviewType));
@@ -362,11 +387,12 @@ export const generateHandler: TaskHandler = async (ctx) => {
     counts = t.counts;
   }
   if (!subject) throw new TaskInputError("No skill was given for the test.");
-  const current = await db.collection("aiPapers").findOne({ studentId: ctx.userId, purpose, subjectKey: skillKey(subject) }, { projection: { status: 1 } });
+  const key = roadmapId ? moduleSubjectKey(roadmapId.toString(), subject) : skillKey(subject);
+  const current = await db.collection("aiPapers").findOne({ studentId: ctx.userId, purpose, subjectKey: key }, { projection: { status: 1 } });
   if (current?.status === "submitted") throw new TaskInputError(`Your previous ${subject} paper is still being graded. Try again once it is done.`);
 
-  await ctx.progress(purpose === "interview" ? `Preparing your ${subject} interview questions…` : `Writing your ${subject} test${counts.coding ? " (coding questions are checked by running them)" : ""}…`);
-  const res = await agent.generatePaper({ skill: agentSkill, difficulty: "mixed", counts }, { signal: ctx.signal });
+  await ctx.progress(purpose === "interview" ? `Preparing your ${subject} interview questions…` : `Writing your ${subject} ${purpose === "module" ? "module " : ""}test${counts.coding ? " (coding questions are checked by running them)" : ""}…`);
+  const res = await agent.generatePaper({ skill: agentSkill, ...(topics.length ? { topics } : {}), difficulty, counts }, { signal: ctx.signal });
 
   const agentStudent = new Map(((Array.isArray(res?.student_paper) ? res.student_paper : []) as unknown[]).filter(isRecord).map((q) => [str(q.id), q]));
   const questions = (Array.isArray(res?.questions) ? res.questions : []).map(sanitizeFull).filter((q): q is PaperQuestion => !!q);
@@ -376,7 +402,6 @@ export const generateHandler: TaskHandler = async (ctx) => {
   const minutes = paperMinutes(actual);
 
   const now = new Date();
-  const key = skillKey(subject);
   const saved = await db.collection("aiPapers").findOneAndUpdate(
     { studentId: ctx.userId, purpose, subjectKey: key },
     {
@@ -386,6 +411,7 @@ export const generateHandler: TaskHandler = async (ctx) => {
         subject,
         subjectKey: key,
         interviewType: typeId,
+        ...(roadmapId ? { roadmapId, topics } : {}),
         agentSkill,
         agentPaperId: str(res?.paper_id, 40),
         counts,
@@ -408,8 +434,8 @@ export const generateHandler: TaskHandler = async (ctx) => {
   return {
     resultId: id,
     summary: `${questions.length} questions · ${minutes} min time limit`,
-    title: purpose === "interview" ? `Your ${subject} mock interview is ready` : `Your ${subject} AI test is ready`,
-    link: id ? `/student/assessment/ai/${id}` : "/student/assessment",
+    title: purpose === "interview" ? `Your ${subject} mock interview is ready` : purpose === "module" ? `Your ${subject} module test is ready` : `Your ${subject} AI test is ready`,
+    link: id ? `/student/assessment/ai/${id}` : roadmapId ? `/student/learning/${roadmapId}` : "/student/assessment",
   };
 };
 
@@ -430,7 +456,7 @@ export const gradeHandler: TaskHandler = async (ctx) => {
   const questions = (Array.isArray(doc.questions) ? doc.questions : []).map(sanitizeFull).filter((q): q is PaperQuestion => !!q);
   const answers = isRecord(doc.answers) ? (doc.answers as Record<string, ClientAnswer>) : {};
   const subject = str(doc.subject);
-  const purpose: PaperPurpose = doc.purpose === "interview" ? "interview" : "skill";
+  const purpose: PaperPurpose = PURPOSES.includes(doc.purpose) ? doc.purpose : "skill";
 
   await ctx.progress(questions.some((q) => q.type === "coding") ? "Running your code against the tests and checking written answers…" : "Checking your answers…");
   const result = sanitizeResult(await agent.gradePaper({ paper: questions, answers, pass_percent: PASS_MARK }, { signal: ctx.signal }));
@@ -462,7 +488,13 @@ export const gradeHandler: TaskHandler = async (ctx) => {
   }
 
   const verify = result.passed && !late && !pendingReview;
-  await recordSkillTestResult(ctx.userId, subject, percent, { passed: result.passed && !late, verify, source: "ai-test" });
+  await recordSkillTestResult(ctx.userId, subject, percent, { passed: result.passed && !late, verify, source: purpose === "module" ? "module-test" : "ai-test" });
+  if (purpose === "module" && doc.roadmapId instanceof ObjectId) {
+    // Topics of the questions the student lost marks on become the module's weak
+    // spots, which its lessons and notes then re-explain.
+    const missedTopics = result.results.filter((r) => r.score < r.max).map((r) => questions.find((q) => q.id === r.id)?.topic ?? "");
+    await recordModuleTest(ctx.userId, doc.roadmapId, subject, { paperId: doc._id as ObjectId, percent, passed: result.passed && !late, missedTopics });
+  }
   const outcome = late
     ? "submitted after the time limit, so it can't verify the skill"
     : !result.passed

@@ -5,7 +5,15 @@
 
 import type { CodingLanguage, GradeResponse, QuestionType, StudentQuestion } from "@/lib/agent/types";
 
-export type PaperPurpose = "skill" | "interview";
+/** skill = AI skill test; interview = mock interview; module = end-of-module test of a learning path. */
+export type PaperPurpose = "skill" | "interview" | "module";
+
+/**
+ * Upsert key of a module test: one paper per (learning path, module), so the
+ * same skill in two paths keeps two separate attempts.
+ */
+export const moduleSubjectKey = (roadmapId: string, skill: string): string =>
+  `${roadmapId}::${skill.trim().toLowerCase().replace(/\s+/g, " ")}`;
 
 /** ready → opened by the student (in-progress) → submitted (grading) → graded. */
 export type PaperStatus = "ready" | "in-progress" | "submitted" | "graded";
@@ -93,6 +101,8 @@ export interface PaperSummary {
   /** Skill name, or the interview type title. */
   subject: string;
   interviewType: string | null;
+  /** Module tests only: the learning path (AI roadmap) the module belongs to. */
+  roadmapId: string | null;
   status: PaperStatus;
   totalMarks: number;
   questionCount: number;

@@ -17,6 +17,8 @@ export interface Slide {
   title: string;
   bullets: string[];
   narration: string;
+  /** Short code / command / worked example shown under the bullets (learning path lessons). */
+  example?: string;
 }
 
 export interface LessonScript {

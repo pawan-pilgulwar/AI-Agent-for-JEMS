@@ -6,9 +6,11 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel, ConfigDict
 from llm import call_agent, LLMUnavailable
 from assessment import router as assessment_router
+from learning import router as learning_router
 
 app = FastAPI(title="Exponentor Agents")
 app.include_router(assessment_router)   # adds /assessment/generate, /run-code, /grade, /grade-text
+app.include_router(learning_router)     # adds /learning/path, /lesson, /notes, /health (vLLM only)
 
 
 @app.exception_handler(LLMUnavailable)

@@ -33,6 +33,43 @@ export function validateTopicToggle(body: unknown): ValidationResult<{ step: str
   return { value: { step, topic, done: body.done } };
 }
 
+/** `{ step, topic }` — one lesson of a learning path. Names are matched against the stored syllabus. */
+export function validateLessonRef(body: unknown): ValidationResult<{ step: string; topic: string }> {
+  if (!isRecord(body)) return { error: "Invalid request body." };
+  const step = asString(body.step).trim().slice(0, 120);
+  const topic = asString(body.topic).trim().slice(0, 200);
+  if (!step || !topic) return { error: "Say which module and lesson to open." };
+  return { value: { step, topic } };
+}
+
+/**
+ * `{ step, topic, check?: { correct, total, missed[] } }` — completes a lesson.
+ * `missed` is filtered against the syllabus on the server before it is used.
+ */
+export function validateLessonDone(
+  body: unknown,
+): ValidationResult<{ step: string; topic: string; check: { correct: number; total: number; missed: string[] } | null }> {
+  const ref = validateLessonRef(body);
+  if (ref.error || !ref.value) return { error: ref.error };
+  const raw = (body as Record<string, unknown>).check;
+  if (raw == null) return { value: { ...ref.value, check: null } };
+  if (!isRecord(raw)) return { error: "Invalid quick-check result." };
+  const { correct, total } = raw;
+  if (!Number.isInteger(correct) || !Number.isInteger(total) || (total as number) < 1 || (total as number) > 10 || (correct as number) < 0 || (correct as number) > (total as number)) {
+    return { error: "Invalid quick-check score." };
+  }
+  const missed = (Array.isArray(raw.missed) ? raw.missed : []).map((m) => asString(m).trim().slice(0, 200)).filter(Boolean).slice(0, 10);
+  return { value: { ...ref.value, check: { correct: correct as number, total: total as number, missed } } };
+}
+
+/** `{ step }` — one module of a learning path. */
+export function validateModuleRef(body: unknown): ValidationResult<{ step: string }> {
+  if (!isRecord(body)) return { error: "Invalid request body." };
+  const step = asString(body.step).trim().slice(0, 120);
+  if (!step) return { error: "Say which module." };
+  return { value: { step } };
+}
+
 export function validateProfileRequest(body: unknown): ValidationResult<{ github: string; leetcode: string }> {
   if (!isRecord(body)) return { error: "Invalid request body." };
   const github = asString(body.github).trim().slice(0, 300);

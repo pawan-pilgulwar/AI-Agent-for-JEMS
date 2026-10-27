@@ -278,3 +278,132 @@ export interface GradeTextResponse {
   wrong_statements?: string[];
   needs_review: boolean;
 }
+
+// ── /learning/* (learning path agent, served by vLLM) ───────────
+
+export const LEARNER_LEVELS = ["beginner", "intermediate", "advanced"] as const;
+export type LearnerLevel = (typeof LEARNER_LEVELS)[number];
+
+export const LEARNING_STYLES = ["visual", "example", "handson", "theory", "mix"] as const;
+export type LearningStyle = (typeof LEARNING_STYLES)[number];
+
+/** Who the content is written for. Built server-side from stored data only — never free text. */
+export interface Learner {
+  level: LearnerLevel;
+  style: LearningStyle;
+  target_role?: string;
+  /** Subtopics the student already knows (recapped in one line). */
+  known?: string[];
+  /** Subtopics the student got wrong in a quick check or module test (re-explained). */
+  weak?: string[];
+}
+
+export interface LearningPathRequest {
+  target_skill?: string | null;
+  steps: (RoadmapStep & { level?: LearnerLevel })[];
+  learner: Learner;
+}
+
+export interface PlanLesson {
+  topic: string;
+  objective: string;
+  focus: string[];
+  skip: string[];
+  approach: string;
+  minutes: number;
+  video_query: string;
+}
+
+export interface PlanModule {
+  skill: string;
+  role: "prerequisite" | "target" | string;
+  level: LearnerLevel;
+  intro: string;
+  lessons: PlanLesson[];
+  test: { topics: string[]; difficulty: Difficulty };
+  planned: boolean;
+  warnings: string[];
+}
+
+export interface LearningPathResponse {
+  target_skill: string | null;
+  model: string;
+  total_minutes: number;
+  modules: PlanModule[];
+}
+
+export interface LearningLessonRequest {
+  skill: string;
+  topic: RoadmapTopic;
+  learner: Learner;
+  objective?: string;
+  focus?: string[];
+  videos?: boolean;
+}
+
+export interface LessonSlide {
+  title: string;
+  bullets: string[];
+  narration: string;
+  example?: string;
+}
+
+export interface QuickCheckQuestion {
+  question: string;
+  options: string[];
+  answer_index: number;
+  subtopic: string;
+  explanation: string;
+}
+
+export interface LessonVideo {
+  video_id: string;
+  title: string;
+  channel: string;
+  url: string;
+}
+
+export interface LessonVideos {
+  query: string;
+  search_url: string;
+  videos: LessonVideo[];
+}
+
+export interface LearningLessonResponse {
+  topic: string;
+  level: LearnerLevel;
+  style: LearningStyle;
+  remedial: string[];
+  slides: LessonSlide[];
+  quick_check: QuickCheckQuestion[];
+  videos: LessonVideos | null;
+  warnings: string[];
+}
+
+export interface LearningNotesRequest {
+  skill: string;
+  topic: RoadmapTopic;
+  learner: Learner;
+  focus?: string[];
+}
+
+export interface NotesSection {
+  heading: string;
+  points: string[];
+  example: string;
+}
+
+export interface LearningNotesResponse {
+  topic: string;
+  level: LearnerLevel;
+  style: LearningStyle;
+  remedial: string[];
+  overview: string;
+  sections: NotesSection[];
+  key_terms: { term: string; meaning: string }[];
+  common_mistakes: string[];
+  summary: string[];
+  self_check: string[];
+  practice: string[];
+  warnings: string[];
+}

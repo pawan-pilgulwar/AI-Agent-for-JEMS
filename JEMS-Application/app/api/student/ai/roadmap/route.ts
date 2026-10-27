@@ -43,7 +43,7 @@ export async function POST(request: Request) {
     dedupeKey: `${s.userId}:roadmap:${skillKey(value.skill)}`,
     input: { skill: value.skill },
     label: `${value.skill} roadmap`,
-    link: "/student/roadmap/ai",
+    link: "/student/roadmap",
   });
   if (!res.ok) return NextResponse.json({ error: res.error }, { status: res.status });
   return NextResponse.json({ task: res.task, created: res.created }, { status: 202 });

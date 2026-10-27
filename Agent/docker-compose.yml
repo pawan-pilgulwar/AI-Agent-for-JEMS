@@ -52,22 +52,72 @@ services:
     restart: unless-stopped
     networks: [appnet]
 
+  # Self-hosted LLM for the learning path agent ONLY (/learning/*). Every other agent keeps using Gemini.
+  # Needs an NVIDIA GPU visible to Docker (Docker Desktop + WSL2 + current NVIDIA driver on Windows).
+  # The defaults fit a 4 GB laptop GPU: a 3B model, 4-bit AWQ, eager mode (no CUDA graphs), short context.
+  # On a bigger GPU set e.g. LEARNING_HF_MODEL=Qwen/Qwen2.5-7B-Instruct-AWQ and VLLM_MAX_MODEL_LEN=16384.
+  # The first start downloads the model into the hf_cache volume, which takes a few minutes.
+  vllm:
+    image: ${VLLM_IMAGE:-vllm/vllm-openai:v0.10.1.1}
+    restart: unless-stopped
+    command:
+      - --model=${LEARNING_HF_MODEL:-Qwen/Qwen2.5-3B-Instruct-AWQ}
+      - --served-model-name=learning
+      - --max-model-len=${VLLM_MAX_MODEL_LEN:-8192}
+      - --gpu-memory-utilization=${VLLM_GPU_MEMORY_UTILIZATION:-0.85}
+      - --max-num-seqs=${VLLM_MAX_NUM_SEQS:-8}
+      # CPU RAM (GiB) for KV-cache swap. vLLM's default of 4 fails when Docker's VM has less RAM than that.
+      - --swap-space=${VLLM_SWAP_SPACE:-0}
+      - --enforce-eager
+    environment:
+      HF_TOKEN: ${HF_TOKEN:-}
+      # Run the engine core in the API server process. The default spawns a second process that loads
+      # torch/CUDA again (~1.5 GB extra RAM), which exhausts a small WSL2 VM and crashes Docker Desktop.
+      VLLM_ENABLE_V1_MULTIPROCESSING: ${VLLM_ENABLE_V1_MULTIPROCESSING:-0}
+    volumes:
+      - hf_cache:/root/.cache/huggingface
+    ipc: host
+    ports:
+      - "127.0.0.1:8000:8000"
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health')\""]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 600s
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    networks: [appnet]
+
   analyzer:
     # build: ./analyzer
-    image: pawan0603/jems-agent:v2
+    image: pawan0603/jems-agent:v3
     restart: unless-stopped
     environment:
       LLM_API_KEYS: ${LLM_API_KEYS:-}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       JUDGE0_URL: http://judge0-server:2358
+      # Learning path agent -> vLLM (above). Not started with --api-key, so any key works on this network.
+      LEARNING_URL: http://vllm:8000/v1
+      LEARNING_MODEL: learning
+      LEARNING_MAX_CONCURRENCY: ${LEARNING_MAX_CONCURRENCY:-4}
+      # Optional: YouTube Data API v3 key (free quota) for real lesson videos; without it, search links only.
+      YOUTUBE_API_KEY: ${YOUTUBE_API_KEY:-AIzaSyA8KjLMwrmhNgnyzoufO0mQ6-0HuBTTxKQ}
     ports:
       - "127.0.0.1:8080:8080"
-    depends_on: [judge0-server]
+    # Not waiting for vLLM to be healthy: the other agents work while the model is still loading.
+    depends_on: [judge0-server, vllm]
     networks: [appnet]
 
 volumes:
   mongo_data:
   pg_data:
+  hf_cache:
 
 networks:
   appnet:

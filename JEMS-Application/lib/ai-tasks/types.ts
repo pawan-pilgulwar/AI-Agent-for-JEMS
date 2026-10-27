@@ -10,6 +10,7 @@ export const AI_TASK_TYPES = [
   "assessment.generate",
   "assessment.grade",
   "match.explain",
+  "learning.plan",
 ] as const;
 export type AiTaskType = (typeof AI_TASK_TYPES)[number];
 
@@ -46,6 +47,7 @@ export const TASK_TYPE_LABEL: Record<AiTaskType, string> = {
   "assessment.generate": "AI test generation",
   "assessment.grade": "AI test grading",
   "match.explain": "Candidate match insight",
+  "learning.plan": "Personal learning path",
 };
 
 export const isActive = (s: AiTaskStatus) => s === "queued" || s === "running";

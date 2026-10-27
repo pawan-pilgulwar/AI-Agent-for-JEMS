@@ -23,6 +23,10 @@ This guide explains every API in your `analyzer` service: the five AI agents, th
 | `POST /agents/roadmap` | Prerequisites + target skill to a detailed syllabus | yes | no |
 | `POST /agents/assessment` | Simple MCQ questions only (older endpoint) | yes | no |
 | `POST /agents/match` | Explain why a student fits a company | yes | no |
+| `POST /learning/path` | Roadmap to a personal learning path (modules of lessons) | yes (vLLM) | no |
+| `POST /learning/lesson` | Narrated video lesson + quick check + YouTube videos for one topic | yes (vLLM) | no |
+| `POST /learning/notes` | Revision notes for one topic | yes (vLLM) | no |
+| `GET /learning/health` | Is the vLLM server up, which model it serves | no | no |
 | `POST /assessment/generate` | Make a mixed question paper | yes | yes (coding) |
 | `POST /assessment/run-code` | Run a student's code once (the "Run" button) | no | yes |
 | `POST /assessment/grade` | Grade a whole submission | yes (written answers) | yes (coding) |
@@ -308,6 +312,59 @@ Kept for compatibility. For real tests use `/assessment/generate` (section 5), w
 ```
 
 **Notes:** calculate the score in code (verified required skills divided by required skills). The model only explains it.
+
+---
+
+### 4.7 Learning path agent (`/learning/*`, runs on vLLM)
+
+Turns a roadmap from `/agents/roadmap` into a personal learning path: **one module per roadmap step, one lesson per topic**. Every lesson is written for one learner. These endpoints are the only ones that use the self-hosted **vLLM** server (the `vllm` service in `docker-compose.yml`); every other agent keeps using Gemini.
+
+**The `learner` object** (same on all three endpoints). Build it on your server from stored data only, never from text the student typed:
+
+| Field | Values | Effect |
+|---|---|---|
+| `level` | `beginner`, `intermediate`, `advanced` | Depth: analogies and definitions → practical use → internals, trade-offs, edge cases |
+| `style` | `visual`, `example`, `handson`, `theory`, `mix` | Flows and comparisons / an example per concept / try-it steps / principles first |
+| `target_role` | e.g. `Backend Developer` | Examples are taken from that kind of work |
+| `known` | subtopic names | Recapped in one sentence |
+| `weak` | subtopic names the student got wrong | An extra "Fixing a mix-up" slide, more depth in the notes |
+
+Names in `known` / `weak` that are not subtopics of the topic are ignored.
+
+**`POST /learning/path`** — plan the modules. Send `target_skill`, the roadmap `steps` (as returned by `/agents/roadmap`; each step may add `level` to override the learner's level for that module) and `learner`. One vLLM call per module.
+
+```json
+{
+  "target_skill": "Spring Boot",
+  "steps": [{"skill": "Core Java", "role": "prerequisite", "summary": "Java language basics.",
+             "topics": [{"name": "Collections", "subtopics": ["List", "Map", "Set", "iteration"]}]}],
+  "learner": {"level": "beginner", "style": "example", "target_role": "Backend Developer"}
+}
+```
+
+Answer: `modules[]`, each with `intro`, `level`, `lessons[]` (`topic`, `objective`, `focus` (subtopics to spend most time on), `skip` (known subtopics), `approach`, `minutes`, `video_query`) and `test` (`topics`, `difficulty`) for the end-of-module test. `focus` and `test.topics` are filtered in code to names that really are in the syllabus. If vLLM answered for no module at all, the call fails with `502`.
+
+**`POST /learning/lesson`** — one lesson: `skill` (the module), `topic` (`name`, `subtopics`, `practice`), `learner`.
+
+Answer: `slides[]` (`title`, `bullets`, `narration` to read aloud, optional `example` code), `quick_check[]` (3 MCQs with `answer_index`, `explanation` and the `subtopic` each one tests, options shuffled in code), `videos` (`query`, `search_url`, `videos[]`), `remedial` (the weak subtopics this version re-explains) and `warnings`. The slides are a "video" script: the app plays them and narrates them with the browser's free Speech API.
+
+**Real videos:** set `YOUTUBE_API_KEY` (YouTube Data API v3, free quota of 10,000 units/day, one search = 100 units) and `videos` lists up to 3 embeddable videos. Without a key, `videos` is empty and only `search_url` (a YouTube search link) is given. Videos are never invented by the model.
+
+**`POST /learning/notes`** — same body as a lesson. Answer: `overview`, `sections[]` (`heading`, `points`, `example`), `key_terms`, `common_mistakes`, `summary`, `self_check`, `practice`.
+
+**The end-of-module test** is not written here: call `/assessment/generate` with the module's skill and the plan's `test.topics` / `test.difficulty`, and grade it with `/assessment/grade` like any other test.
+
+**`GET /learning/health`** → `{"ok": true, "url": "http://vllm:8000/v1", "model": "learning", "served": ["learning"], "youtube": false}`. `ok` is false while the model is still loading.
+
+**Setting up vLLM.** The `vllm` service needs an NVIDIA GPU visible to Docker (on Windows: Docker Desktop with the WSL2 backend and a current NVIDIA driver). The defaults fit a 4 GB laptop GPU: `Qwen/Qwen2.5-3B-Instruct-AWQ` (4-bit), 8k context, eager mode. On a bigger GPU, set these in `.env`:
+
+```
+LEARNING_HF_MODEL=Qwen/Qwen2.5-7B-Instruct-AWQ
+VLLM_MAX_MODEL_LEN=16384
+VLLM_GPU_MEMORY_UTILIZATION=0.90
+```
+
+The first start downloads the model (about 2 GB for the 3B one) into the `hf_cache` volume. Watch it with `docker compose logs -f vllm` until it says the server is running, then check `Invoke-RestMethod http://localhost:8080/learning/health`. Requests use vLLM's guided JSON (`response_format: json_schema`), so even a small model returns valid JSON.
 
 ---
 
@@ -678,6 +735,9 @@ Steps 2, 3, 8 and the score in step 9 are **code you still need to write**. The 
 | `prereqs` answer contains `warnings` | The tree is still weak after 3 tries | Edit it by hand (TPO review) or try again |
 | Analyzer crashes with `ModuleNotFoundError` | A file or package is missing | Check all 4 `.py` files are in `analyzer\` and `requirements.txt` has `httpx` |
 | GPU out of memory in `llm-analysis` logs | Another program is using the GPU | Close it, then `docker compose up -d llm-analysis` |
+| `/learning/*` returns `502` "Could not reach http://vllm:8000/v1" | vLLM is not running or is still loading the model | `docker compose logs vllm --tail 50`; wait for the model to load; `GET /learning/health` |
+| `vllm` exits with "could not select device driver" | Docker cannot see the GPU | Install the NVIDIA driver / enable WSL2 GPU support in Docker Desktop |
+| `vllm` logs "CUDA out of memory" or "No available memory for the cache blocks" | The model does not fit next to what the display uses | Lower `VLLM_GPU_MEMORY_UTILIZATION` (e.g. 0.80) or `VLLM_MAX_MODEL_LEN` (e.g. 4096) |
 
 ---
 
@@ -704,6 +764,9 @@ Then run `docker compose up -d --build analyzer`.
 | Coding problem writing | `CODING_URL` | `CODING_MODEL` |
 | Checking written answers | `GRADER_URL` | `GRADER_MODEL` |
 | `/agents/match` | `MATCH_URL` | `MATCH_MODEL` |
+| `/learning/*` (vLLM only, no Gemini fallback) | `LEARNING_URL` (default `http://vllm:8000/v1`) | `LEARNING_MODEL` (default `learning`) |
+
+The learning agent also reads `LEARNING_API_KEY` (only needed if vLLM is started with `--api-key`), `LEARNING_MAX_CONCURRENCY` (default 4), `LEARNING_MAX_TOKENS` (default 2048) and `LEARNING_GUIDED_JSON` (`0` turns guided decoding off for servers that do not support it).
 
 ---
 
@@ -715,6 +778,7 @@ docker compose up -d --build analyzer               # rebuild after editing anal
 docker compose logs analyzer --tail 30              # analyzer messages
 docker compose logs llm-analysis --tail 30          # model server messages
 docker compose logs judge0-worker --tail 30         # code runner messages
+docker compose logs -f vllm                         # learning model loading / requests
 docker compose restart analyzer                     # restart without rebuilding
 docker compose config                               # check docker-compose.yml for mistakes
 ```

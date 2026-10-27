@@ -27,8 +27,14 @@ export function stepProgress(step: RoadmapStep, topicsDone: ReadonlySet<string>,
 }
 
 export interface RoadmapProgressSummary {
+  /** Topics (lessons) done / in total. */
   done: number;
   total: number;
+  /**
+   * Overall progress. Every step is its topics plus one module test, so a
+   * path only reaches 100% once each step's skill is verified by a test —
+   * watching every lesson is not enough on its own.
+   */
   percent: number;
   verifiedSteps: number;
 }
@@ -43,5 +49,6 @@ export function roadmapProgress(steps: RoadmapStep[], topicsDone: ReadonlySet<st
     total += p.total;
     if (p.verified) verifiedSteps++;
   }
-  return { done, total, percent: total ? Math.round((done / total) * 100) : 0, verifiedSteps };
+  const units = total + steps.length;
+  return { done, total, percent: units ? Math.round(((done + verifiedSteps) / units) * 100) : 0, verifiedSteps };
 }

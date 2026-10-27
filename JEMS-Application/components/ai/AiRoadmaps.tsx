@@ -56,10 +56,10 @@ export default function AiRoadmaps({
     <DashboardShell>
       <DashboardContainer className="space-y-6">
         <div>
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-slate/10 px-2.5 py-1 text-xs font-semibold text-slate"><Sparkles className="h-3.5 w-3.5" /> AI agents</span>
-          <h1 className="mt-3 text-2xl font-bold text-navy">AI learning roadmaps</h1>
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-slate/10 px-2.5 py-1 text-xs font-semibold text-slate"><Sparkles className="h-3.5 w-3.5" /> AI Personalized</span>
+          <h1 className="mt-3 text-2xl font-bold text-navy">Learning Roadmaps</h1>
           <p className="mt-1 max-w-2xl text-sm text-mediumgray">
-            Name a skill you want. The prerequisite agent maps what it builds on, skips anything you&apos;ve already verified, and the roadmap agent writes a syllabus for the rest — topics, practice, a project and resources.
+            Choose a skill to learn. The AI prerequisite agent maps the foundations, skips anything you&apos;ve already verified, and builds your custom week-by-week syllabus with topics, practice, projects, and resources.
           </p>
         </div>
 
@@ -109,7 +109,7 @@ export default function AiRoadmaps({
         </Card>
 
         {roadmaps.length === 0 ? (
-          <EmptyState icon={MapIcon} title="No AI roadmaps yet" hint="Generate your first one above — it usually takes one to three minutes, and you'll get a notification when it's ready." />
+          <EmptyState icon={MapIcon} title="No roadmaps yet" hint="Generate your first personalized roadmap above — it takes about one to two minutes, and you'll get a notification when it's ready." />
         ) : (
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
             {roadmaps.map((r) => {
@@ -129,7 +129,7 @@ export default function AiRoadmaps({
                   )}
                   {task && (busy || task.status === "failed") && <TaskStatus task={task} className="mt-3" />}
                   <div className="mt-auto flex items-center gap-2 pt-4">
-                    <Link href={`/student/roadmap/ai/${r.id}`} className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-navy px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-[#1f2937]">
+                    <Link href={`/student/roadmap/${r.id}`} className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-navy px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-[#1f2937]">
                       Open <ArrowRight className="h-3.5 w-3.5" />
                     </Link>
                     <button

@@ -56,6 +56,7 @@ async function setupDatabase() {
       'aiProfileAnalyses',
       'aiPapers',
       'matchExplanations',
+      'learningContent',
       'supportTickets',
       'counters',
     ];
@@ -176,6 +177,11 @@ async function setupDatabase() {
     await db.collection('mockInterviews').createIndex({ paperId: 1 }, { unique: true, partialFilterExpression: { paperId: { $exists: true } } });
     await db.collection('notifications').createIndex({ userId: 1, read: 1, createdAt: -1 });
     console.log('  ✓ AI results (skillPrereqs, aiRoadmaps, aiProfileAnalyses, aiPapers, matchExplanations)');
+
+    // Learning path agent: shared cache of generated lessons and notes (60-day TTL).
+    await db.collection('learningContent').createIndex({ cacheKey: 1 }, { unique: true });
+    await db.collection('learningContent').createIndex({ createdAt: 1 }, { expireAfterSeconds: 60 * 86400 });
+    console.log('  ✓ learningContent');
 
     await db.collection('supportTickets').createIndex({ userId: 1, createdAt: -1 });
     console.log('  ✓ supportTickets');

@@ -507,7 +507,8 @@ export async function getLearningPaths(
       return {
         id: r._id.toString(),
         source: roadmapId ? ("roadmap" as const) : ("path" as const),
-        href: roadmapId ? `/student/roadmap/ai/${roadmapId}` : null,
+        // A roadmap's path opens its lessons, quick checks and module tests.
+        href: roadmapId ? `/student/learning/${roadmapId}` : null,
         title: str(r.title),
         category: str(r.category),
         level: str(r.level) || "Beginner",

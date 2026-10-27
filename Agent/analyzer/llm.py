@@ -50,6 +50,20 @@ AGENTS = {
     "coding":     _cfg("CODING_URL", "CODING_MODEL"),    # writes coding problems (a code model fits best)
     "grader":     _cfg("GRADER_URL", "GRADER_MODEL"),    # checks written answers against key points
     "match":      _cfg("MATCH_URL", "MATCH_MODEL"),
+    # The learning path agent runs ONLY on the self-hosted vLLM server (docker compose service "vllm").
+    "learning":   (os.getenv("LEARNING_URL", "http://vllm:8000/v1"), os.getenv("LEARNING_MODEL", "learning")),
+}
+
+# Agents served by their own OpenAI-compatible server instead of Gemini: their own key, no Gemini
+# fallback models, their own concurrency cap (a local GPU is not bound by Gemini's per-minute quota),
+# and vLLM's guided decoding (response_format json_schema), which keeps a small model's JSON valid.
+DEDICATED = {
+    "learning": {
+        "keys": [os.getenv("LEARNING_API_KEY", "EMPTY")],
+        "slots": threading.BoundedSemaphore(int(os.getenv("LEARNING_MAX_CONCURRENCY", "4"))),
+        "guided": os.getenv("LEARNING_GUIDED_JSON", "1") != "0",
+        "max_tokens": int(os.getenv("LEARNING_MAX_TOKENS", "2048")),
+    },
 }
 
 # The request is a plain chat call, the same as test_gemini_api.py. Gemini's OpenAI-compatible
@@ -62,20 +76,28 @@ JSON_RULES = (
 
 
 def call_agent(agent, system, user, schema, temperature=0.2):
-    if not KEYS:
+    url, model = AGENTS[agent]
+    own = DEDICATED.get(agent)
+    keys = own["keys"] if own else KEYS
+    if not keys:
         raise RuntimeError("No LLM API key set. Put your key(s) in LLM_API_KEYS (comma-separated) "
                            "or GEMINI_API_KEY.")
-    url, model = AGENTS[agent]
-    model_names = list(dict.fromkeys([model, *FALLBACK_MODELS]))
+    model_names = [model] if own else list(dict.fromkeys([model, *FALLBACK_MODELS]))
     messages = [
         {"role": "system", "content": system + JSON_RULES + json.dumps(schema)},
         {"role": "user", "content": user},
     ]
+    extra = {}
+    if own:
+        extra["max_tokens"] = own["max_tokens"]
+        if own["guided"]:
+            extra["response_format"] = {"type": "json_schema", "json_schema": {"name": agent, "schema": schema}}
+    slots = own["slots"] if own else _slots
     start = next(_next_key)  # spread load across keys, round-robin
     failures = []
-    for i in range(len(KEYS)):
-        key = KEYS[(start + i) % len(KEYS)]
-        key_label = f"key #{(start + i) % len(KEYS) + 1} (...{key[-4:]})"
+    for i in range(len(keys)):
+        key = keys[(start + i) % len(keys)]
+        key_label = f"key #{(start + i) % len(keys) + 1} (...{key[-4:]})"
         client = OpenAI(base_url=url, api_key=key, timeout=REQUEST_TIMEOUT, max_retries=0)
         for model_name in model_names:
             until = _exhausted.get((key, model_name), 0)
@@ -84,7 +106,7 @@ def call_agent(agent, system, user, schema, temperature=0.2):
                 continue
             try:
                 for _ in range(2):  # one retry if the reply is not valid JSON
-                    r = _create(client, model=model_name, temperature=temperature, messages=messages)
+                    r = _create(client, slots, model=model_name, temperature=temperature, messages=messages, **extra)
                     data = _parse_json(r.choices[0].message.content)
                     if data is not None:
                         return data
@@ -119,11 +141,11 @@ def call_agent(agent, system, user, schema, temperature=0.2):
     raise LLMUnavailable(f"LLM call for '{agent}' failed at {url}: " + "; ".join(failures))
 
 
-def _create(client, **kwargs):
+def _create(client, slots, **kwargs):
     """chat.completions.create with a concurrency cap and waiting out per-minute rate limits."""
     for attempt in range(RATE_LIMIT_RETRIES + 1):
         try:
-            with _slots:
+            with slots:
                 return client.chat.completions.create(**kwargs)
         except RateLimitError as exc:
             delay = _retry_delay(_error_message(exc), attempt)

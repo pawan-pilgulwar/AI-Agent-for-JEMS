@@ -1,3 +1,4 @@
+import { planHandler } from "@/lib/ai/learning";
 import { matchHandler } from "@/lib/ai/match";
 import { generateHandler, gradeHandler } from "@/lib/ai/papers";
 import { prereqsHandler } from "@/lib/ai/prereqs";
@@ -14,4 +15,5 @@ export const HANDLERS: Record<AiTaskType, TaskHandler> = {
   "assessment.generate": generateHandler,
   "assessment.grade": gradeHandler,
   "match.explain": matchHandler,
+  "learning.plan": planHandler,
 };

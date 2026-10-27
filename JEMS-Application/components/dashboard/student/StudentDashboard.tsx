@@ -130,7 +130,7 @@ function buildNextSteps(data: DashboardData, ai: DashboardAiData): NextStep[] {
       title: "Generate an AI roadmap",
       desc: "Pick a skill and get a week-by-week syllabus of what you're missing",
       action: "Generate",
-      href: "/student/roadmap/ai",
+      href: "/student/roadmap",
     });
   }
   if (ai.codingSkills === null) {
@@ -211,7 +211,7 @@ export default function StudentDashboard({ data, ai }: { data: DashboardData; ai
           title: `${ai.roadmapCount} AI roadmap${ai.roadmapCount === 1 ? "" : "s"}`,
           desc: `Latest: ${ai.roadmaps[0].skill} · ${ai.roadmaps[0].steps} steps · about ${ai.roadmaps[0].totalWeeks} weeks`,
           action: "Open",
-          href: `/student/roadmap/ai/${ai.roadmaps[0].id}`,
+          href: `/student/roadmap/${ai.roadmaps[0].id}`,
         }
       : {
           Icon: Sparkles,
@@ -219,7 +219,7 @@ export default function StudentDashboard({ data, ai }: { data: DashboardData; ai
           title: "AI roadmaps",
           desc: "No roadmap yet — generate a syllabus for any skill",
           action: "Generate",
-          href: "/student/roadmap/ai",
+          href: "/student/roadmap",
         },
     ai.openPapers[0]
       ? {

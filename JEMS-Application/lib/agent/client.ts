@@ -8,6 +8,8 @@
  * normalised into `AgentError`, which tells the task runner whether a retry
  * could help. `/agents/roadmap` makes dozens of rate-limited LLM calls, so it
  * gets its own, longer limit (`AGENT_ROADMAP_TIMEOUT_MS`, default 750 s).
+ * `/learning/*` runs on the self-hosted vLLM server, whose speed depends on
+ * the GPU, so it has its own limit too (`AGENT_LEARNING_TIMEOUT_MS`, 240 s).
  */
 
 import http from "node:http";
@@ -19,6 +21,12 @@ import type {
   GradeResponse,
   GradeTextRequest,
   GradeTextResponse,
+  LearningLessonRequest,
+  LearningLessonResponse,
+  LearningNotesRequest,
+  LearningNotesResponse,
+  LearningPathRequest,
+  LearningPathResponse,
   MatchRequest,
   MatchResponse,
   PrereqsRequest,
@@ -35,6 +43,7 @@ import type {
 
 const DEFAULT_TIMEOUT_MS = 300_000;
 const DEFAULT_ROADMAP_TIMEOUT_MS = 750_000;
+const DEFAULT_LEARNING_TIMEOUT_MS = 240_000;
 
 export class AgentError extends Error {
   /** HTTP status from the Agent, or 0 for network / timeout failures. */
@@ -161,6 +170,8 @@ async function request<T>(
 
 type CallOpts = { signal?: AbortSignal };
 
+const learningTimeoutMs = () => envMs("AGENT_LEARNING_TIMEOUT_MS", DEFAULT_LEARNING_TIMEOUT_MS);
+
 /** One function per Agent endpoint (see `Agent/postman/`). */
 export const agent = {
   health: () => request<{ ok: boolean }>("GET", "/health", undefined, { timeoutMs: 5_000 }),
@@ -184,4 +195,11 @@ export const agent = {
   gradePaper: (body: GradeRequest, o?: CallOpts) => request<GradeResponse>("POST", "/assessment/grade", body, o),
   gradeText: (body: GradeTextRequest, o?: CallOpts) =>
     request<GradeTextResponse>("POST", "/assessment/grade-text", body, o),
+
+  learningPath: (body: LearningPathRequest, o?: CallOpts) =>
+    request<LearningPathResponse>("POST", "/learning/path", body, { ...o, timeoutMs: learningTimeoutMs() }),
+  learningLesson: (body: LearningLessonRequest, o?: CallOpts) =>
+    request<LearningLessonResponse>("POST", "/learning/lesson", body, { ...o, timeoutMs: learningTimeoutMs() }),
+  learningNotes: (body: LearningNotesRequest, o?: CallOpts) =>
+    request<LearningNotesResponse>("POST", "/learning/notes", body, { ...o, timeoutMs: learningTimeoutMs() }),
 };

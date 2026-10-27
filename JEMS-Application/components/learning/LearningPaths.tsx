@@ -66,9 +66,9 @@ export default function LearningPaths({ paths }: { paths: LearningPathView[] }) 
           <EmptyState
             icon={Layers}
             title="No learning paths yet"
-            hint="Generate an AI roadmap for a skill you want to learn and it becomes a learning path here. Tick off topics as you go."
+            hint="Generate an AI roadmap for a skill you want to learn and it becomes a learning path here: video lessons and notes written for your level, with a test at the end of every module."
             ctaLabel="Generate an AI roadmap"
-            ctaHref="/student/roadmap/ai"
+            ctaHref="/student/roadmap"
           />
         </DashboardContainer>
       </DashboardShell>

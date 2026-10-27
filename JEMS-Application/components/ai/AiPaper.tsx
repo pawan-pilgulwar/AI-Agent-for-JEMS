@@ -188,8 +188,12 @@ export default function AiPaper({ initial }: { initial: PaperView }) {
     setBusy("regen");
     setError("");
     try {
-      const body = paper.purpose === "interview" ? { purpose: "interview", interviewType: paper.interviewType } : { purpose: "skill", skill: paper.subject };
-      track(await startAiTask("/api/student/ai/papers", body));
+      if (paper.purpose === "module" && paper.roadmapId) {
+        track(await startAiTask(`/api/student/learning/${paper.roadmapId}/test`, { step: paper.subject }));
+      } else {
+        const body = paper.purpose === "interview" ? { purpose: "interview", interviewType: paper.interviewType } : { purpose: "skill", skill: paper.subject };
+        track(await startAiTask("/api/student/ai/papers", body));
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not generate a new paper.");
     } finally {
@@ -198,7 +202,10 @@ export default function AiPaper({ initial }: { initial: PaperView }) {
   };
 
   const isInterview = paper.purpose === "interview";
-  const backHref = isInterview ? "/student/interviews" : "/student/assessment";
+  const isModule = paper.purpose === "module" && !!paper.roadmapId;
+  const backHref = isInterview ? "/student/interviews" : isModule ? `/student/learning/${paper.roadmapId}` : "/student/assessment";
+  const backLabel = isInterview ? "Mock interviews" : isModule ? "Learning path" : "Skill assessment";
+  const kindLabel = isInterview ? "AI mock interview" : isModule ? "Module test" : "AI skill test";
   const Icon = isInterview ? Mic : ShieldCheck;
   const answered = paper.questions.filter((q) => isAnswered(q, answers[q.id])).length;
   const q = paper.questions[idx];
@@ -210,8 +217,8 @@ export default function AiPaper({ initial }: { initial: PaperView }) {
       <DashboardContainer className="mx-auto max-w-4xl space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <Link href={backHref} className="inline-flex items-center gap-1 text-sm font-semibold text-slate hover:underline"><ArrowLeft className="h-4 w-4" /> {isInterview ? "Mock interviews" : "Skill assessment"}</Link>
-            <span className="mt-3 flex items-center gap-1.5 text-xs font-semibold text-slate"><Icon className="h-3.5 w-3.5" /> {isInterview ? "AI mock interview" : "AI skill test"}</span>
+            <Link href={backHref} className="inline-flex items-center gap-1 text-sm font-semibold text-slate hover:underline"><ArrowLeft className="h-4 w-4" /> {backLabel}</Link>
+            <span className="mt-3 flex items-center gap-1.5 text-xs font-semibold text-slate"><Icon className="h-3.5 w-3.5" /> {kindLabel}</span>
             <h1 className="mt-1 text-2xl font-bold text-navy">{paper.subject}</h1>
           </div>
           {paper.status === "in-progress" && (
@@ -354,10 +361,12 @@ export default function AiPaper({ initial }: { initial: PaperView }) {
                   : paper.late
                     ? "Submitted after the time limit, so this attempt can't verify the skill."
                     : !paper.passed
-                      ? "Below the 70% pass mark. Review the feedback, then try again after 24 hours."
+                      ? isModule
+                        ? "Below the 70% pass mark. Your module's lessons and notes now explain what you missed — review them, then retake the test after 24 hours."
+                        : "Below the 70% pass mark. Review the feedback, then try again after 24 hours."
                       : paper.pendingReview
                         ? "You passed! Some written answers were flagged for a quick faculty review before the skill is marked verified."
-                        : `${paper.subject} is now verified on your profile — it counts for your resume, portfolio and job matching.`}
+                        : `${paper.subject} is now verified on your profile — it counts for your resume, portfolio and job matching.${isModule ? " This module of your learning path is complete." : ""}`}
               </p>
               <div className="mt-6 flex flex-wrap justify-center gap-3">
                 <Link href={backHref} className="inline-flex items-center gap-2 rounded-lg border border-lightgray bg-white px-5 py-2.5 text-sm font-semibold text-navy hover:border-slate hover:text-slate"><ArrowLeft className="h-4 w-4" /> Back</Link>

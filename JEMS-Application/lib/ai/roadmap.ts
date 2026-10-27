@@ -117,7 +117,7 @@ export const roadmapHandler: TaskHandler = async (ctx) => {
     resultId: id,
     summary: `${roadmap.steps.length} steps · about ${roadmap.total_weeks} weeks${known.length ? ` · skipped ${known.length} skill${known.length === 1 ? "" : "s"} you've verified` : ""}`,
     title: `Your ${skill} roadmap is ready`,
-    link: id ? `/student/roadmap/ai/${id}` : "/student/roadmap/ai",
+    link: id ? `/student/roadmap/${id}` : "/student/roadmap",
   };
 };
 

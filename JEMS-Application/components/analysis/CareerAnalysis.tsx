@@ -491,7 +491,7 @@ function SkillColumn({
               <span className="inline-flex items-center gap-1 font-medium text-navy">{s.skill}{s.verified && <CircleCheck className="h-3 w-3 text-emerald" />}</span>
               <span className="flex items-center gap-2">
                 {roadmapLinks && (
-                  <Link href={`/student/roadmap/ai?skill=${encodeURIComponent(s.skill)}`} className="text-[10px] font-semibold text-slate hover:underline" title={`Generate an AI learning roadmap for ${s.skill}`}>
+                  <Link href={`/student/roadmap?skill=${encodeURIComponent(s.skill)}`} className="text-[10px] font-semibold text-slate hover:underline" title={`Generate an AI learning roadmap for ${s.skill}`}>
                     AI roadmap
                   </Link>
                 )}

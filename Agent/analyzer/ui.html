@@ -552,6 +552,34 @@ page({group:'Agents', id:'match', title:'Match explanation', method:'POST', path
     company:{name:$('.f-cn',c.form).value,required_skills:list($('.f-cr',c.form).value)}, match_score:+$('.f-ms',c.form).value}),
   render:renderMatch});
 
+page({group:'Learning', id:'learning-health', title:'Learning agent health', method:'GET', path:'/learning/health',
+  desc:'Checks whether the learning agent model is being served by vLLM. This is separate from the analyzer health check.',
+  render:d=>`<div class="box ${d.ok?'ok':'bad'}" style="font-size:16px">${d.ok?'✓ Learning model is up':'Learning model is unavailable'}</div>
+    <div class="tbl" style="margin-top:10px"><table><tr><th>URL</th><td>${esc(d.url||'')}</td></tr>
+    <tr><th>Model</th><td>${esc(d.model||'')}</td></tr><tr><th>Served models</th><td>${esc((d.served||[]).join(', ')||'none')}</td></tr>
+    <tr><th>YouTube configured</th><td>${d.youtube?'Yes':'No'}</td></tr>${d.error?`<tr><th>Error</th><td>${esc(d.error)}</td></tr>`:''}</table></div>`});
+
+page({group:'Learning', id:'learning-path', title:'Personal learning path', method:'POST', path:'/learning/path',
+  desc:'Turns roadmap steps into learner-specific modules, lessons and test topics. Edit the sample JSON to test with a roadmap from /agents/roadmap.',
+  slow:'One model call per module; may take a minute',
+  sample:{target_skill:'Spring Boot',steps:[{skill:'Core Java',role:'prerequisite',summary:'Java language basics.',
+    topics:[{name:'Classes and objects',subtopics:['fields','constructors','methods']},
+      {name:'Collections',subtopics:['List','Map','Set','iteration']}]}],
+    learner:{level:'beginner',style:'example',target_role:'Backend Developer'}}});
+
+page({group:'Learning', id:'learning-lesson', title:'Generate video lesson', method:'POST', path:'/learning/lesson',
+  desc:'Generates narrated lesson slides and a quick check for one topic. Set videos to true to include YouTube search (requires YOUTUBE_API_KEY).',
+  slow:'Uses the learning model; may take a minute',
+  sample:{skill:'Core Java',topic:{name:'Collections',subtopics:['List','Map','Set','iteration'],
+    practice:['Count word frequencies in a sentence with a HashMap']},
+    learner:{level:'beginner',style:'example',weak:['Map']},videos:false}});
+
+page({group:'Learning', id:'learning-notes', title:'Generate revision notes', method:'POST', path:'/learning/notes',
+  desc:'Generates personalized notes, key terms, common mistakes and self-check questions for one topic.',
+  slow:'Uses the learning model; may take a minute',
+  sample:{skill:'Core Java',topic:{name:'Collections',subtopics:['List','Map','Set','iteration']},
+    learner:{level:'intermediate',style:'theory'}}});
+
 page({group:'Assessment', id:'generate', title:'Generate paper & take test', method:'POST', path:'/assessment/generate',
   desc:'Builds a mixed paper (MCQ, multi-select, written, coding). Then take it as a student right here: run your code against samples, submit, and see the graded result.',
   slow:'30–90 s with a coding question',

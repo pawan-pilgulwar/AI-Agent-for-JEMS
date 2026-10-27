@@ -10,8 +10,8 @@ import {
   LifeBuoy,
   type LucideIcon,
   Mic,
+  Route,
   Settings,
-  Sparkles,
   Target,
   User,
 } from "lucide-react";
@@ -35,10 +35,8 @@ export const NAVIGATE: NavItem[] = [
   { label: "Career Analysis", icon: BarChart3, href: "/student/analysis" },
   { label: "Assessments", icon: ClipboardCheck, href: "/student/assessment" },
   { label: "Mock Interviews", icon: Mic, href: "/student/interviews" },
-  { label: "AI Roadmaps", icon: Sparkles, href: "/student/roadmap/ai" },
+  { label: "Roadmap", icon: Route, href: "/student/roadmap" },
   { label: "Learning Paths", icon: GraduationCap, href: "/student/learning" },
-  // { label: "Roadmap", icon: Route, href: "/student/roadmap" },
-  // { label: "My Progress", icon: TrendingUp, href: "/student/progress" },
 ];
 
 export const JOBS: NavItem[] = [
