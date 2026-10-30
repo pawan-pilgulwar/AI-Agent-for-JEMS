@@ -149,9 +149,9 @@ const STARTERS = {
 const FIXES = {
   422: 'Invalid or missing field. Check double quotes, no trailing commas, required fields, type names and language names.',
   413: 'Code (max 20,000 chars) or input (max 10,000 chars) is too long.',
-  502: 'Judge0 not reachable. Run "docker compose ps"; check judge0-server and judge0-worker, and JUDGE0_URL.',
-  500: 'Internal error. Run "docker compose logs analyzer --tail 30". Often the Gemini API key is missing, invalid, or out of quota.',
-  0: 'Could not connect. Is the analyzer running? "docker compose up -d --build analyzer"',
+  502: 'Dependency service (Judge0 or vLLM) not reachable.',
+  500: 'Internal server error. Run "docker compose logs analyzer --tail 30".',
+  0: 'Could not connect to the analyzer. Check if it is running: "docker compose ps".',
 };
 
 async function call(method, url, body, timeoutMs=600000){
@@ -210,10 +210,12 @@ function renderError(res){
   else msg = `<li>${esc(typeof d==='string'? d.slice(0,800) : JSON.stringify(d))}</li>`;
   const detail = String((d && d.detail) || '');
   let fix = FIXES[res.status] || '';
-  if (res.status === 502 && detail.startsWith('LLM')) {   // 502 from the Gemini side, not Judge0
-    fix = /429|rate limit|quota/i.test(detail)
-      ? 'Gemini rate limit or quota reached. Wait a minute and retry, add more keys to LLM_API_KEYS, or lower LLM_MAX_CONCURRENCY.'
-      : 'Gemini refused the request. Read the message above: check the API key, LLM_MODEL and fallback model names.';
+  if (res.status === 502) {
+    if (/judge0/i.test(detail)) {
+      fix = 'Judge0 is not reachable. Run "docker compose ps"; check judge0-server, judge0-worker, and JUDGE0_URL.';
+    } else {
+      fix = 'vLLM model server is unavailable or busy. Check container status: "docker compose ps" or "docker compose logs vllm --tail 50".';
+    }
   }
   return `<div class="box bad"><b>Request failed${res.status?' ('+res.status+')':''}</b><ul style="margin:6px 0 0;padding-left:18px">${msg}</ul></div>${fix?`<div class="box warn"><b>Likely fix:</b> ${esc(fix)}</div>`:''}`;
 }
@@ -552,9 +554,9 @@ page({group:'Agents', id:'match', title:'Match explanation', method:'POST', path
     company:{name:$('.f-cn',c.form).value,required_skills:list($('.f-cr',c.form).value)}, match_score:+$('.f-ms',c.form).value}),
   render:renderMatch});
 
-page({group:'Learning', id:'learning-health', title:'Learning agent health', method:'GET', path:'/learning/health',
-  desc:'Checks whether the learning agent model is being served by vLLM. This is separate from the analyzer health check.',
-  render:d=>`<div class="box ${d.ok?'ok':'bad'}" style="font-size:16px">${d.ok?'✓ Learning model is up':'Learning model is unavailable'}</div>
+page({group:'System', id:'vllm-health', title:'vLLM model health', method:'GET', path:'/learning/health',
+  desc:'Checks whether the unified vLLM model is running and being served.',
+  render:d=>`<div class="box ${d.ok?'ok':'bad'}" style="font-size:16px">${d.ok?'✓ vLLM model is up':'vLLM model is unavailable'}</div>
     <div class="tbl" style="margin-top:10px"><table><tr><th>URL</th><td>${esc(d.url||'')}</td></tr>
     <tr><th>Model</th><td>${esc(d.model||'')}</td></tr><tr><th>Served models</th><td>${esc((d.served||[]).join(', ')||'none')}</td></tr>
     <tr><th>YouTube configured</th><td>${d.youtube?'Yes':'No'}</td></tr>${d.error?`<tr><th>Error</th><td>${esc(d.error)}</td></tr>`:''}</table></div>`});

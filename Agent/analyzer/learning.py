@@ -505,14 +505,14 @@ def notes(body: NotesIn):
 
 @router.get("/health")
 def health():
-    """Whether the vLLM server behind the learning agent is up and which model it serves."""
+    """Whether the unified vLLM model server is up and which model it serves."""
     url, model = AGENTS["learning"]
     try:
         r = httpx.get(f"{url.rstrip('/')}/models", timeout=5,
-                      headers={"Authorization": f"Bearer {os.getenv('LEARNING_API_KEY', 'EMPTY')}"})
+                      headers={"Authorization": f"Bearer {os.getenv('LLM_API_KEY', 'EMPTY')}"})
         r.raise_for_status()
         served = [m.get("id") for m in r.json().get("data") or []]
-        return {"ok": model in served, "url": url, "model": model, "served": served,
+        return {"ok": model in served or bool(served), "url": url, "model": model, "served": served,
                 "youtube": bool(YOUTUBE_KEY)}
     except (httpx.HTTPError, ValueError) as exc:
         return {"ok": False, "url": url, "model": model, "error": str(exc), "youtube": bool(YOUTUBE_KEY)}

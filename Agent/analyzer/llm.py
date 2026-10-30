@@ -1,74 +1,46 @@
-
-import os, json, re, time, threading, itertools
-from openai import (OpenAI, NotFoundError, RateLimitError, PermissionDeniedError, AuthenticationError,
-                    BadRequestError, APIStatusError, APIConnectionError, APITimeoutError)
+import os, json, re, time, threading
+from openai import OpenAI, BadRequestError, APIConnectionError, APITimeoutError, APIStatusError
 
 
 class LLMUnavailable(RuntimeError):
-    """Every configured key was rejected or rate-limited by the provider."""
+    """The local vLLM server or model was unavailable or failed to respond."""
 
 
-# One or more API keys, comma-separated. When a key hits its rate limit (HTTP 429) or is
-# rejected (HTTP 400/401/403), the call is retried with the next key. A single key in LLM_API_KEY or
-# GEMINI_API_KEY also works. Both Gemini key formats (classic "AIza..." and newer "AQ....") are passed
-# to Google exactly as given; there is no prefix check.
-KEYS = [k.strip() for k in (os.getenv("LLM_API_KEYS") or os.getenv("LLM_API_KEY")
-                            or os.getenv("GEMINI_API_KEY") or "").split(",") if k.strip()]
-_next_key = itertools.count()
+# Unified vLLM server and model configuration
+DEFAULT_URL = os.getenv("LLM_URL", "http://vllm:8000/v1")
+DEFAULT_MODEL = os.getenv("LLM_MODEL", "vllm")
+API_KEY = os.getenv("LLM_API_KEY", "EMPTY")
 
-# The roadmap agent fans out ~30 calls at once, far above Gemini's free-tier per-minute limit.
-# Cap how many requests are in flight, and on a 429 wait (as long as Google asks) and try again.
-_slots = threading.BoundedSemaphore(int(os.getenv("LLM_MAX_CONCURRENCY", "3")))
-RATE_LIMIT_RETRIES = int(os.getenv("LLM_RATE_LIMIT_RETRIES", "4"))
-# Seconds to wait for one reply. A stalled call moves on to the next model/key instead of hanging
-# the request (the UI gives up after a few minutes).
-REQUEST_TIMEOUT = float(os.getenv("LLM_TIMEOUT", "120"))
+# GPU concurrency limit & timeouts
+_slots = threading.BoundedSemaphore(int(os.getenv("LLM_MAX_CONCURRENCY", "4")))
+REQUEST_TIMEOUT = float(os.getenv("LLM_TIMEOUT", "180"))
+MAX_RETRIES = int(os.getenv("LLM_RETRIES", "2"))
+DEFAULT_MAX_TOKENS = int(os.getenv("LLM_MAX_TOKENS", "2048"))
+USE_GUIDED_JSON = os.getenv("LLM_GUIDED_JSON", "1") != "0"
 
-# (key, model) -> time.time() when its daily quota resets. Skipped until then, so an exhausted main
-# model does not cost a wasted round trip before every fallback call.
-_exhausted = {}
-
-# Default: Google Gemini through its OpenAI-compatible endpoint (no GPU needed).
-DEFAULT_URL = os.getenv("LLM_URL", "https://generativelanguage.googleapis.com/v1beta/openai/")
-DEFAULT_MODEL = os.getenv("LLM_MODEL", "gemini-3.8-flash")
-# Tried in order when the main model is overloaded (503), out of quota (429) or missing (404).
-# Override with LLM_FALLBACK_MODELS (comma-separated).
-FALLBACK_MODELS = [m.strip() for m in os.getenv("LLM_FALLBACK_MODELS", "gemini-3.5-flash-lite").split(",")
-                   if m.strip()]
-
-
-def _cfg(url_var, model_var):
-    return (os.getenv(url_var, DEFAULT_URL), os.getenv(model_var, DEFAULT_MODEL))
-
-
-# agent name -> (base_url, model_name). Override per agent with e.g. CODING_MODEL=...
+# All agents use the single unified vLLM model
 AGENTS = {
-    "prereqs":    _cfg("PREREQS_URL", "PREREQS_MODEL"),
-    "profile":    _cfg("PROFILE_URL", "PROFILE_MODEL"),
-    "roadmap":    _cfg("ROADMAP_URL", "ROADMAP_MODEL"),
-    "assessment": _cfg("ASSESS_URL", "ASSESS_MODEL"),    # writes MCQ, multi-select, short-answer questions
-    "coding":     _cfg("CODING_URL", "CODING_MODEL"),    # writes coding problems (a code model fits best)
-    "grader":     _cfg("GRADER_URL", "GRADER_MODEL"),    # checks written answers against key points
-    "match":      _cfg("MATCH_URL", "MATCH_MODEL"),
-    # The learning path agent runs ONLY on the self-hosted vLLM server (docker compose service "vllm").
-    "learning":   (os.getenv("LEARNING_URL", "http://vllm:8000/v1"), os.getenv("LEARNING_MODEL", "learning")),
+    "prereqs":    (DEFAULT_URL, DEFAULT_MODEL),
+    "profile":    (DEFAULT_URL, DEFAULT_MODEL),
+    "roadmap":    (DEFAULT_URL, DEFAULT_MODEL),
+    "assessment": (DEFAULT_URL, DEFAULT_MODEL),
+    "coding":     (DEFAULT_URL, DEFAULT_MODEL),
+    "grader":     (DEFAULT_URL, DEFAULT_MODEL),
+    "match":      (DEFAULT_URL, DEFAULT_MODEL),
+    "learning":   (DEFAULT_URL, DEFAULT_MODEL),
 }
 
-# Agents served by their own OpenAI-compatible server instead of Gemini: their own key, no Gemini
-# fallback models, their own concurrency cap (a local GPU is not bound by Gemini's per-minute quota),
-# and vLLM's guided decoding (response_format json_schema), which keeps a small model's JSON valid.
-DEDICATED = {
-    "learning": {
-        "keys": [os.getenv("LEARNING_API_KEY", "EMPTY")],
-        "slots": threading.BoundedSemaphore(int(os.getenv("LEARNING_MAX_CONCURRENCY", "4"))),
-        "guided": os.getenv("LEARNING_GUIDED_JSON", "1") != "0",
-        "max_tokens": int(os.getenv("LEARNING_MAX_TOKENS", "2048")),
-    },
-}
+# Cached OpenAI client
+_client = None
 
-# The request is a plain chat call, the same as test_gemini_api.py. Gemini's OpenAI-compatible
-# endpoint rejects many JSON schemas in response_format with HTTP 400, so the schema goes into
-# the prompt instead and the JSON is parsed from the reply text.
+
+def _get_client():
+    global _client
+    if _client is None:
+        _client = OpenAI(base_url=DEFAULT_URL, api_key=API_KEY, timeout=REQUEST_TIMEOUT, max_retries=0)
+    return _client
+
+
 JSON_RULES = (
     "\n\nOUTPUT FORMAT: Reply with ONE JSON object and nothing else: no markdown, no code fences, no "
     "explanation. It must match this JSON Schema (include every required field):\n"
@@ -76,118 +48,82 @@ JSON_RULES = (
 
 
 def call_agent(agent, system, user, schema, temperature=0.2):
-    url, model = AGENTS[agent]
-    own = DEDICATED.get(agent)
-    keys = own["keys"] if own else KEYS
-    if not keys:
-        raise RuntimeError("No LLM API key set. Put your key(s) in LLM_API_KEYS (comma-separated) "
-                           "or GEMINI_API_KEY.")
-    model_names = [model] if own else list(dict.fromkeys([model, *FALLBACK_MODELS]))
+    client = _get_client()
+
     messages = [
         {"role": "system", "content": system + JSON_RULES + json.dumps(schema)},
         {"role": "user", "content": user},
     ]
-    extra = {}
-    if own:
-        extra["max_tokens"] = own["max_tokens"]
-        if own["guided"]:
-            extra["response_format"] = {"type": "json_schema", "json_schema": {"name": agent, "schema": schema}}
-    slots = own["slots"] if own else _slots
-    start = next(_next_key)  # spread load across keys, round-robin
-    failures = []
-    for i in range(len(keys)):
-        key = keys[(start + i) % len(keys)]
-        key_label = f"key #{(start + i) % len(keys) + 1} (...{key[-4:]})"
-        client = OpenAI(base_url=url, api_key=key, timeout=REQUEST_TIMEOUT, max_retries=0)
-        for model_name in model_names:
-            until = _exhausted.get((key, model_name), 0)
-            if until > time.time():
-                failures.append(f"{key_label}: {model_name} out of daily quota for {int(until - time.time())}s more")
-                continue
-            try:
-                for _ in range(2):  # one retry if the reply is not valid JSON
-                    r = _create(client, slots, model=model_name, temperature=temperature, messages=messages, **extra)
-                    data = _parse_json(r.choices[0].message.content)
-                    if data is not None:
-                        return data
-                failures.append(f"{key_label}: {model_name} did not return valid JSON")
-            except NotFoundError as exc:
-                failures.append(f"{model_name}: not found - {_error_message(exc)}")
-            except BadRequestError as exc:
-                msg = _error_message(exc)
-                # Gemini reports a bad or expired key as HTTP 400: "API key not valid" for AIza... keys,
-                # "Invalid Auth key" for AQ.... keys.
-                if re.search(r"api key|auth key|authorization", msg, re.I):
-                    failures.append(f"{key_label}: rejected (400) - {msg}")
-                    break
-                failures.append(f"{key_label}: {model_name} rejected the request (400) - {msg}")
-            except RateLimitError as exc:
-                # Gemini quotas are per model, so the next model on the same key may still work.
-                delay = _retry_delay(_error_message(exc), 0)
-                if delay > 60:
-                    _exhausted[(key, model_name)] = time.time() + delay
-                failures.append(f"{key_label}: {model_name} rate limited (429) - {_error_message(exc)}")
-            except (PermissionDeniedError, AuthenticationError) as exc:
-                # 403 "Your project has been denied access" is a block on the whole Google Cloud
-                # project, so every key created in that project fails the same way.
-                failures.append(f"{key_label}: rejected ({exc.status_code}) - {_error_message(exc)}")
-                break
-            except APIStatusError as exc:
-                failures.append(f"{key_label}: {model_name} HTTP {exc.status_code} - {_error_message(exc)}")
-            except APITimeoutError:
-                failures.append(f"{key_label}: {model_name} timed out after {REQUEST_TIMEOUT:.0f}s")
-            except APIConnectionError as exc:
-                raise LLMUnavailable(f"Could not reach {url}: {exc.__cause__ or exc}")
-    raise LLMUnavailable(f"LLM call for '{agent}' failed at {url}: " + "; ".join(failures))
 
+    max_tokens = int(os.getenv(f"{agent.upper()}_MAX_TOKENS", str(DEFAULT_MAX_TOKENS)))
+    extra = {"max_tokens": max_tokens}
+    if USE_GUIDED_JSON:
+        extra["response_format"] = {"type": "json_schema", "json_schema": {"name": agent, "schema": schema}}
 
-def _create(client, slots, **kwargs):
-    """chat.completions.create with a concurrency cap and waiting out per-minute rate limits."""
-    for attempt in range(RATE_LIMIT_RETRIES + 1):
+    for attempt in range(MAX_RETRIES + 1):
         try:
-            with slots:
-                return client.chat.completions.create(**kwargs)
-        except RateLimitError as exc:
-            delay = _retry_delay(_error_message(exc), attempt)
-            # A daily quota ("retry in 5h25m...") will not reset by waiting a minute, so fail fast on it.
-            if attempt == RATE_LIMIT_RETRIES or delay > 60:
-                raise
-            time.sleep(delay)
+            with _slots:
+                try:
+                    r = client.chat.completions.create(
+                        model=DEFAULT_MODEL,
+                        temperature=temperature,
+                        messages=messages,
+                        **extra
+                    )
+                except BadRequestError as exc:
+                    # If guided decoding failed due to schema syntax in vLLM, retry without response_format
+                    if "response_format" in extra:
+                        extra_fallback = {"max_tokens": max_tokens}
+                        r = client.chat.completions.create(
+                            model=DEFAULT_MODEL,
+                            temperature=temperature,
+                            messages=messages,
+                            **extra_fallback
+                        )
+                    else:
+                        raise
 
+            data = _parse_json(r.choices[0].message.content)
+            if data is not None:
+                return data
 
-def _retry_delay(msg, attempt):
-    """Seconds Gemini asks us to wait, e.g. "Please retry in 23.4s." or "retry in 5h25m21.3s"."""
-    backoff = 5 * 2 ** attempt   # 5, 10, 20, 40s: spans a full per-minute quota window
-    m = re.search(r"retry in ((?:[\d.]+(?:ms|[hms])\s*)+)", msg, re.I)
-    if not m:
-        return backoff
-    units = {"h": 3600, "m": 60, "s": 1, "ms": 0.001}
-    asked = sum(float(n) * units[u.lower()]
-                for n, u in re.findall(r"([\d.]+)(ms|[hms])", m.group(1), re.I))
-    # Google's hint is often far too short while other threads keep using the same quota.
-    return max(asked + 1, backoff)
+            if attempt < MAX_RETRIES:
+                time.sleep(1)
+                continue
+            raise LLMUnavailable(f"Model '{DEFAULT_MODEL}' at {DEFAULT_URL} did not return valid JSON.")
+
+        except APIConnectionError as exc:
+            raise LLMUnavailable(f"Could not reach vLLM server at {DEFAULT_URL}: {exc.__cause__ or exc}. "
+                                 f"Ensure the vLLM container is running and healthy.")
+        except APITimeoutError:
+            raise LLMUnavailable(f"vLLM request timed out after {REQUEST_TIMEOUT:.0f}s for agent '{agent}'.")
+        except APIStatusError as exc:
+            raise LLMUnavailable(f"vLLM server error ({exc.status_code}): {_error_message(exc)}")
+
+    raise LLMUnavailable(f"LLM call for '{agent}' failed after {MAX_RETRIES} attempts.")
 
 
 def _parse_json(text):
-    """Return the JSON object in the reply, tolerating code fences or text around it."""
+    """Extract and parse the JSON object from the model output."""
     if not text:
         return None
-    text = re.sub(r"^```(?:json)?\s*|\s*```$", "", text.strip())
+    cleaned = re.sub(r"^```(?:json)?\s*|\s*```$", "", text.strip())
     try:
-        data = json.loads(text)
+        data = json.loads(cleaned)
+        return data if isinstance(data, dict) else None
     except ValueError:
-        start, end = text.find("{"), text.rfind("}")
-        if start == -1 or end <= start:
-            return None
-        try:
-            data = json.loads(text[start:end + 1])
-        except ValueError:
-            return None
-    return data if isinstance(data, dict) else None
+        start, end = cleaned.find("{"), cleaned.rfind("}")
+        if start != -1 and end > start:
+            try:
+                data = json.loads(cleaned[start:end + 1])
+                return data if isinstance(data, dict) else None
+            except ValueError:
+                return None
+    return None
 
 
 def _error_message(exc):
-    body = exc.body
+    body = getattr(exc, "body", None)
     if isinstance(body, list) and body:
         body = body[0]
     if isinstance(body, dict):

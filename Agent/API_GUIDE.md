@@ -317,7 +317,7 @@ Kept for compatibility. For real tests use `/assessment/generate` (section 5), w
 
 ### 4.7 Learning path agent (`/learning/*`, runs on vLLM)
 
-Turns a roadmap from `/agents/roadmap` into a personal learning path: **one module per roadmap step, one lesson per topic**. Every lesson is written for one learner. These endpoints are the only ones that use the self-hosted **vLLM** server (the `vllm` service in `docker-compose.yml`); every other agent keeps using Gemini.
+Turns a roadmap from `/agents/roadmap` into a personal learning path: **one module per roadmap step, one lesson per topic**. Every lesson is written for one learner. All agents, including `/learning/*`, run on the self-hosted **vLLM** server (the `vllm` service in `docker-compose.yml`).
 
 **The `learner` object** (same on all three endpoints). Build it on your server from stored data only, never from text the student typed:
 
@@ -354,12 +354,12 @@ Answer: `slides[]` (`title`, `bullets`, `narration` to read aloud, optional `exa
 
 **The end-of-module test** is not written here: call `/assessment/generate` with the module's skill and the plan's `test.topics` / `test.difficulty`, and grade it with `/assessment/grade` like any other test.
 
-**`GET /learning/health`** → `{"ok": true, "url": "http://vllm:8000/v1", "model": "learning", "served": ["learning"], "youtube": false}`. `ok` is false while the model is still loading.
+**`GET /learning/health`** → `{"ok": true, "url": "http://vllm:8000/v1", "model": "vllm", "served": ["vllm"], "youtube": false}`. `ok` is false while the model is still loading.
 
 **Setting up vLLM.** The `vllm` service needs an NVIDIA GPU visible to Docker (on Windows: Docker Desktop with the WSL2 backend and a current NVIDIA driver). The defaults fit a 4 GB laptop GPU: `Qwen/Qwen2.5-3B-Instruct-AWQ` (4-bit), 8k context, eager mode. On a bigger GPU, set these in `.env`:
 
 ```
-LEARNING_HF_MODEL=Qwen/Qwen2.5-7B-Instruct-AWQ
+VLLM_MODEL=Qwen/Qwen2.5-7B-Instruct-AWQ
 VLLM_MAX_MODEL_LEN=16384
 VLLM_GPU_MEMORY_UTILIZATION=0.90
 ```
@@ -764,9 +764,9 @@ Then run `docker compose up -d --build analyzer`.
 | Coding problem writing | `CODING_URL` | `CODING_MODEL` |
 | Checking written answers | `GRADER_URL` | `GRADER_MODEL` |
 | `/agents/match` | `MATCH_URL` | `MATCH_MODEL` |
-| `/learning/*` (vLLM only, no Gemini fallback) | `LEARNING_URL` (default `http://vllm:8000/v1`) | `LEARNING_MODEL` (default `learning`) |
+| All agents (`/agents/*`, `/assessment/*`, `/learning/*`) | `LLM_URL` (default `http://vllm:8000/v1`) | `LLM_MODEL` (default `vllm`) |
 
-The learning agent also reads `LEARNING_API_KEY` (only needed if vLLM is started with `--api-key`), `LEARNING_MAX_CONCURRENCY` (default 4), `LEARNING_MAX_TOKENS` (default 2048) and `LEARNING_GUIDED_JSON` (`0` turns guided decoding off for servers that do not support it).
+All agents share the local vLLM concurrency slots (`LLM_MAX_CONCURRENCY`, default 4), timeout (`LLM_TIMEOUT`, default 180s), and token cap (`LLM_MAX_TOKENS`, default 2048).
 
 ---
 
@@ -791,8 +791,8 @@ Run all of these from the `exponentor` folder.
 
 - The analyzer and Judge0 have **no login**. Keep them bound to `127.0.0.1` and call them only from your own backend. Add authentication before exposing anything to the internet.
 - **Save the full paper on the server** and send students only `student_paper`. The full paper contains the answer keys and hidden tests.
-- Gemini API keys in both formats work: the classic `AIza...` keys and the newer `AQ....` keys from Google AI Studio. Put one key in `GEMINI_API_KEY`, or several (comma-separated) in `LLM_API_KEYS`. The key is sent to Google exactly as written; nothing checks its prefix.
-- Keep `.env` (with `LLM_API_KEY`) private and out of GitHub. If a key was ever pasted in a chat or screenshot, generate a new one.
+- All AI agents run on the local self-hosted **vLLM** model, requiring no external hosted LLM API keys (Gemini / OpenAI). All prompts and inferences stay local to your environment.
+- Keep `.env` (with any tokens such as `HF_TOKEN`) private and out of version control.
 - AI output is a **draft**. Prerequisite trees should be approved by the TPO. Questions and written-answer grades used for real verification should be reviewed by faculty, especially anything in `needs_review`.
 - Coding tests check outputs only. They do not detect copying. For real exams, add a time limit, randomise questions per student, and compare submissions for similarity.
 - Student profile and answer data is personal data. Collect it with consent and store only what you need.

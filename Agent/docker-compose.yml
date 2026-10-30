@@ -52,17 +52,17 @@ services:
     restart: unless-stopped
     networks: [appnet]
 
-  # Self-hosted LLM for the learning path agent ONLY (/learning/*). Every other agent keeps using Gemini.
+  # Self-hosted single vLLM model powering all agents across the project (/agents/*, /assessment/*, /learning/*).
   # Needs an NVIDIA GPU visible to Docker (Docker Desktop + WSL2 + current NVIDIA driver on Windows).
   # The defaults fit a 4 GB laptop GPU: a 3B model, 4-bit AWQ, eager mode (no CUDA graphs), short context.
-  # On a bigger GPU set e.g. LEARNING_HF_MODEL=Qwen/Qwen2.5-7B-Instruct-AWQ and VLLM_MAX_MODEL_LEN=16384.
+  # On a bigger GPU set e.g. VLLM_MODEL=Qwen/Qwen2.5-7B-Instruct-AWQ and VLLM_MAX_MODEL_LEN=16384.
   # The first start downloads the model into the hf_cache volume, which takes a few minutes.
   vllm:
     image: ${VLLM_IMAGE:-vllm/vllm-openai:v0.10.1.1}
     restart: unless-stopped
     command:
-      - --model=${LEARNING_HF_MODEL:-Qwen/Qwen2.5-3B-Instruct-AWQ}
-      - --served-model-name=learning
+      - --model=${VLLM_MODEL:-Qwen/Qwen2.5-3B-Instruct-AWQ}
+      - --served-model-name=vllm
       - --max-model-len=${VLLM_MAX_MODEL_LEN:-8192}
       - --gpu-memory-utilization=${VLLM_GPU_MEMORY_UTILIZATION:-0.85}
       - --max-num-seqs=${VLLM_MAX_NUM_SEQS:-8}
@@ -98,19 +98,18 @@ services:
     # build: ./analyzer
     image: pawan0603/jems-agent:v3
     restart: unless-stopped
+    volumes:
+      - ./analyzer:/app
     environment:
-      LLM_API_KEYS: ${LLM_API_KEYS:-}
-      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      LLM_URL: http://vllm:8000/v1
+      LLM_MODEL: vllm
+      LLM_MAX_CONCURRENCY: ${LLM_MAX_CONCURRENCY:-4}
+      LLM_MAX_TOKENS: ${LLM_MAX_TOKENS:-2048}
       JUDGE0_URL: http://judge0-server:2358
-      # Learning path agent -> vLLM (above). Not started with --api-key, so any key works on this network.
-      LEARNING_URL: http://vllm:8000/v1
-      LEARNING_MODEL: learning
-      LEARNING_MAX_CONCURRENCY: ${LEARNING_MAX_CONCURRENCY:-4}
       # Optional: YouTube Data API v3 key (free quota) for real lesson videos; without it, search links only.
       YOUTUBE_API_KEY: ${YOUTUBE_API_KEY:-AIzaSyA8KjLMwrmhNgnyzoufO0mQ6-0HuBTTxKQ}
     ports:
       - "127.0.0.1:8080:8080"
-    # Not waiting for vLLM to be healthy: the other agents work while the model is still loading.
     depends_on: [judge0-server, vllm]
     networks: [appnet]
 
